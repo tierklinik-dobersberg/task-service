@@ -1,0 +1,26 @@
+version: "3"
+services:
+
+  customer-service:
+    image: ghcr.io/tierklinik-dobersberg/container-service
+    build: 
+      context: ./
+    depends_on:
+      mongo:
+        condition: service_started
+    ports:
+      - 8090:8080
+    environment:
+      MONGO_DATABASE: "customer-service"
+      MONGO_URL: "mongodb://root:example@mongo/"
+      IDM_URL: "https://account.dobersberg.vet"
+      DEBUG: "true"
+
+  mongo:
+    image: mongo
+    hostname: mongo
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
