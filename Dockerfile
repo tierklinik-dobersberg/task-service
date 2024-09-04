@@ -14,11 +14,11 @@ RUN go mod verify
 
 COPY ./ ./
 
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -v -ldflags "-s -w -linkmode external -extldflags -static" -o /go/bin/customerd ./cmds/customerd
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -v -ldflags "-s -w -linkmode external -extldflags -static" -o /go/bin/taskd ./cmds/taskd
 
 FROM gcr.io/distroless/static
 
-COPY --from=gobuild /go/bin/customerd /go/bin/customerd
+COPY --from=gobuild /go/bin/taskd /go/bin/taskd
 EXPOSE 8080
 
-ENTRYPOINT ["/go/bin/customerd"]
+ENTRYPOINT ["/go/bin/taskd"]

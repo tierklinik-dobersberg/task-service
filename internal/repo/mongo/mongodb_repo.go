@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -40,7 +43,175 @@ func New(ctx context.Context, uri, dbName string) (*Repository, error) {
 }
 
 func (db *Repository) setup(ctx context.Context) error {
+	if _, err := db.boards.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "name", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to create board indexes: %w", err)
+	}
+
 	return nil
+}
+
+func (db *Repository) CreateBoard(ctx context.Context, board *tasksv1.Board) error {
+	model, err := boardFromProto(board)
+	if err != nil {
+		return err
+	}
+
+	res, err := db.boards.InsertOne(ctx, model)
+	if err != nil {
+		return err
+	}
+
+	board.Id = res.InsertedID.(primitive.ObjectID).Hex()
+
+	return nil
+}
+
+func (db *Repository) ListBoards(ctx context.Context) ([]*tasksv1.Board, error) {
+	res, err := db.boards.Find(ctx, bson.M{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*Board
+	if err := res.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode boards: %w", err)
+	}
+
+	pbBoards := make([]*tasksv1.Board, len(results))
+	for idx, b := range results {
+		pbBoards[idx] = b.ToProto()
+	}
+
+	return pbBoards, nil
+}
+
+func (db *Repository) DeleteBoard(ctx context.Context, id string) error {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", err)
+	}
+
+	res, err := db.boards.DeleteOne(ctx, bson.M{"_id": oid})
+	if err != nil {
+		return fmt.Errorf("failed to perform delete operation: %w", err)
+	}
+
+	if res.DeletedCount == 0 {
+		return repo.ErrBoardNotFound
+	}
+
+	return nil
+}
+
+func (db *Repository) GetBoard(ctx context.Context, id string) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid id: %w", err)
+	}
+
+	res := db.boards.FindOne(ctx, bson.M{"_id": oid})
+	if res.Err() != nil {
+		return nil, convertErr(res.Err())
+	}
+
+	var b Board
+	if err := res.Decode(&b); err != nil {
+		return nil, fmt.Errorf("failed to decode board: %w", err)
+	}
+
+	return b.ToProto(), nil
+}
+
+func (db *Repository) SaveNotification(ctx context.Context, boardID string, notification *tasksv1.BoardNotification) (*tasksv1.Board, error) {
+	model := notificationFromProto(notification)
+
+	oid, err := primitive.ObjectIDFromHex(boardID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid board id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+		"$set": bson.M{
+			"notifications.$[filter]": model,
+		},
+	}, options.Update().SetArrayFilters(options.ArrayFilters{
+		Filters: []any{
+			bson.M{
+				"filter.name": model.Name,
+			},
+		},
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+	}
+
+	if replaceResult.ModifiedCount > 0 {
+		return db.GetBoard(ctx, boardID)
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"notifications": model,
+		},
+	}
+
+	res, err := db.boards.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	if res.MatchedCount == 0 {
+		return nil, repo.ErrBoardNotFound
+	}
+
+	return db.GetBoard(ctx, boardID)
+}
+
+func (db *Repository) DeleteNotification(ctx context.Context, boardID, notificationName string) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(boardID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid board id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"notifications": bson.M{
+				"name": notificationName,
+			},
+		},
+	}
+
+	res := db.boards.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrBoardNotFound
+		}
+
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	var b Board
+	if err := res.Decode(&b); err != nil {
+		return nil, fmt.Errorf("failed to decode board: %w", err)
+	}
+
+	return b.ToProto(), nil
 }
 
 // Compile-time check
@@ -52,7 +223,7 @@ func convertErr(err error) error {
 	}
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return repo.ErrCustomerNotFound
+		return repo.ErrBoardNotFound
 	}
 
 	return err

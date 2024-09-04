@@ -10,6 +10,7 @@ import (
 	"github.com/bufbuild/protovalidate-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/cors"
 	"github.com/tierklinik-dobersberg/apis/pkg/log"
@@ -17,8 +18,8 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/validator"
 	"github.com/tierklinik-dobersberg/task-service/internal/config"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
-	"github.com/tierklinik-dobersberg/task-service/internal/repo/inmem"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo/mongo"
+	"github.com/tierklinik-dobersberg/task-service/internal/services/boards"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
@@ -101,14 +102,19 @@ func main() {
 			logrus.Fatalf("failed to create repository: %s", err)
 		}
 	} else {
-		logrus.Warn("using in-memory database, data will not be persisted accross restarts")
-
-		backend = inmem.New()
+		logrus.Fatal("missing MONGO_URL and MONGO_DATABASE")
 	}
 
-	_ = repo.New(backend)
+	repo := repo.New(backend)
 
-	// create a new CallService and add it to the mux.
+	svc, err := boards.New(ctx, repo)
+	if err != nil {
+		logrus.Fatalf("failed to create board service: %w", err)
+	}
+
+	// create a new BoardService and add it to the mux.
+	path, handler := tasksv1connect.NewBoardServiceHandler(svc, connect.WithInterceptors(interceptors...))
+	serveMux.Handle(path, handler)
 
 	loggingHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

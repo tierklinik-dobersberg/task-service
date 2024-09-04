@@ -3,6 +3,5 @@ package repo
 import "errors"
 
 var (
-	ErrCustomerNotFound = errors.New("customer not found")
-	ErrCustomerLocked   = errors.New("customer already locked")
+	ErrBoardNotFound = errors.New("board not found")
 )
