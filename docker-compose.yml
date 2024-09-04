@@ -1,7 +1,7 @@
 version: "3"
 services:
 
-  customer-service:
+  task-service:
     image: ghcr.io/tierklinik-dobersberg/container-service
     build: 
       context: ./
@@ -11,7 +11,7 @@ services:
     ports:
       - 8090:8080
     environment:
-      MONGO_DATABASE: "customer-service"
+      MONGO_DATABASE: "task-service"
       MONGO_URL: "mongodb://root:example@mongo/"
       IDM_URL: "https://account.dobersberg.vet"
       DEBUG: "true"
