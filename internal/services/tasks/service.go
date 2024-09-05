@@ -195,6 +195,12 @@ func (svc *Service) ensureBoardPermissions(ctx context.Context, boardID string, 
 		return err
 	}
 
+	// In debug mode or without a IdmURL we don't perform any
+	// permisssion checks at all
+	if svc.resolver == nil {
+		return nil
+	}
+
 	var permissions *tasksv1.BoardPermission
 
 	switch op {
