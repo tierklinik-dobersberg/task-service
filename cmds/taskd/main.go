@@ -20,6 +20,7 @@ import (
 	"github.com/tierklinik-dobersberg/task-service/internal/permission"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo/mongo"
+	"github.com/tierklinik-dobersberg/task-service/internal/services"
 	"github.com/tierklinik-dobersberg/task-service/internal/services/boards"
 	"github.com/tierklinik-dobersberg/task-service/internal/services/tasks"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -109,7 +110,16 @@ func main() {
 
 	repo := repo.New(backend)
 
-	boardService, err := boards.New(ctx, repo)
+	var resolver *permission.Resolver
+	if cfg.IdmURL != "" {
+		resolver = permission.NewResolver(http.DefaultClient, cfg.IdmURL)
+	}
+	common := &services.Common{
+		Resolver: resolver,
+		Config:   *cfg,
+	}
+
+	boardService, err := boards.New(ctx, repo, common)
 	if err != nil {
 		logrus.Fatalf("failed to create board service: %s", err)
 	}
@@ -118,12 +128,7 @@ func main() {
 	path, handler := tasksv1connect.NewBoardServiceHandler(boardService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)
 
-	var resolver *permission.Resolver
-	if cfg.IdmURL != "" {
-		resolver = permission.NewResolver(http.DefaultClient, cfg.IdmURL)
-	}
-
-	taskService, err := tasks.New(ctx, repo, resolver)
+	taskService, err := tasks.New(ctx, repo, common)
 	if err != nil {
 		logrus.Fatalf("failed to create task service: %s", err)
 	}

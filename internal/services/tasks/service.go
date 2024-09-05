@@ -13,9 +13,8 @@ import (
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
-	"github.com/tierklinik-dobersberg/task-service/internal/config"
-	"github.com/tierklinik-dobersberg/task-service/internal/permission"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
+	"github.com/tierklinik-dobersberg/task-service/internal/services"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -23,13 +22,13 @@ import (
 type Service struct {
 	tasksv1connect.UnimplementedTaskServiceHandler
 
-	cfg      config.Config
-	repo     repo.Backend
-	resolver *permission.Resolver
+	repo repo.Backend
+
+	*services.Common
 }
 
-func New(ctx context.Context, cfg config.Config, repo repo.Backend, resolver *permission.Resolver) (*Service, error) {
-	return &Service{repo: repo, resolver: resolver}, nil
+func New(ctx context.Context, repo repo.Backend, common *services.Common) (*Service, error) {
+	return &Service{repo: repo, Common: common}, nil
 }
 
 func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1.CreateTaskRequest]) (*connect.Response[tasksv1.CreateTaskResponse], error) {
@@ -197,7 +196,7 @@ func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[
 	}
 
 	file := filepath.Join(
-		svc.cfg.UploadDirectory,
+		svc.Config.UploadDirectory,
 		fmt.Sprintf("%s-%s", task.Id, req.Msg.Name),
 	)
 
@@ -250,48 +249,7 @@ func (svc *Service) ensureBoardPermissions(ctx context.Context, boardID string, 
 		return err
 	}
 
-	// In debug mode or without a IdmURL we don't perform any
-	// permisssion checks at all
-	if svc.resolver == nil {
-		return nil
-	}
-
-	var permissions *tasksv1.BoardPermission
-
-	switch op {
-	case "read":
-		permissions = board.ReadPermission
-	case "write":
-		permissions = board.WritePermission
-
-	default:
-		return fmt.Errorf("invalid operation %q", op)
-	}
-
-	// if there are not permissions set we allow the operation
-	if permissions == nil {
-		return nil
-	}
-
-	remoteUser := auth.From(ctx)
-	if remoteUser == nil {
-		if os.Getenv("DEBUG") != "" {
-			return nil
-		}
-
-		return connect.NewError(connect.CodePermissionDenied, errors.New("authentication required"))
-	}
-
-	// the board owner is always allowed
-	if board.OwnerId == remoteUser.ID {
-		return nil
-	}
-
-	if !svc.resolver.IsAllowed(ctx, remoteUser.ID, permissions) {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you are not allowed to perform this operation"))
-	}
-
-	return nil
+	return svc.IsAllowed(ctx, board, op)
 }
 
 func (svc *Service) ensureTaskPermissions(ctx context.Context, taskID string, op string) (*tasksv1.Task, error) {

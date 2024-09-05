@@ -12,18 +12,22 @@ import (
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
+	"github.com/tierklinik-dobersberg/task-service/internal/services"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type Service struct {
 	tasksv1connect.UnimplementedBoardServiceHandler
 
+	*services.Common
+
 	repo repo.Repo
 }
 
-func New(ctx context.Context, repo repo.Repo) (*Service, error) {
+func New(ctx context.Context, repo repo.Repo, common *services.Common) (*Service, error) {
 	return &Service{
-		repo: repo,
+		repo:   repo,
+		Common: common,
 	}, nil
 }
 
@@ -74,8 +78,15 @@ func (svc *Service) ListBoards(ctx context.Context, req *connect.Request[tasksv1
 		return nil, err
 	}
 
+	result := make([]*tasksv1.Board, 0, len(list))
+	for _, b := range list {
+		if err := svc.IsAllowed(ctx, b, "read"); err == nil {
+			result = append(result, b)
+		}
+	}
+
 	return connect.NewResponse(&tasksv1.ListBoardsResponse{
-		Boards: list,
+		Boards: result,
 	}), nil
 }
 
@@ -98,6 +109,10 @@ func (svc *Service) GetBoard(ctx context.Context, req *connect.Request[tasksv1.G
 			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
 
+		return nil, err
+	}
+
+	if err := svc.IsAllowed(ctx, res, "read"); err != nil {
 		return nil, err
 	}
 
