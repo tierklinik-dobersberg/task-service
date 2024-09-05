@@ -13,7 +13,6 @@ services:
     environment:
       MONGO_DATABASE: "task-service"
       MONGO_URL: "mongodb://root:example@mongo/"
-      IDM_URL: "https://account.dobersberg.vet"
       DEBUG: "true"
 
   mongo:
