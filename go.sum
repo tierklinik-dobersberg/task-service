@@ -94,6 +94,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tierklinik-dobersberg/apis v0.0.47 h1:8nxPp0N2OA3oiJRJvVXWctmp4AObce9e3oMT9YTYTSg=
 github.com/tierklinik-dobersberg/apis v0.0.47/go.mod h1:5vHtpoPktL3Oix5/9OE5KhhGDiX5zoaNM/grJLb+3Ys=
+github.com/tierklinik-dobersberg/apis v0.0.49 h1:KujComt0SP5bPrNqYhbPvlG4O/uOUz+Yd2QxHDdntbI=
+github.com/tierklinik-dobersberg/apis v0.0.49/go.mod h1:5vHtpoPktL3Oix5/9OE5KhhGDiX5zoaNM/grJLb+3Ys=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=
 github.com/xdg-go/pbkdf2 v1.0.0/go.mod h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI=
 github.com/xdg-go/scram v1.1.2 h1:FHX5I5B4i4hKRVRBCFRxq1iQRej7WO3hhBuJf+UUySY=

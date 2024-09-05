@@ -17,9 +17,11 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/server"
 	"github.com/tierklinik-dobersberg/apis/pkg/validator"
 	"github.com/tierklinik-dobersberg/task-service/internal/config"
+	"github.com/tierklinik-dobersberg/task-service/internal/permission"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo/mongo"
 	"github.com/tierklinik-dobersberg/task-service/internal/services/boards"
+	"github.com/tierklinik-dobersberg/task-service/internal/services/tasks"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
@@ -107,13 +109,26 @@ func main() {
 
 	repo := repo.New(backend)
 
-	svc, err := boards.New(ctx, repo)
+	boardService, err := boards.New(ctx, repo)
 	if err != nil {
-		logrus.Fatalf("failed to create board service: %w", err)
+		logrus.Fatalf("failed to create board service: %s", err)
 	}
 
 	// create a new BoardService and add it to the mux.
-	path, handler := tasksv1connect.NewBoardServiceHandler(svc, connect.WithInterceptors(interceptors...))
+	path, handler := tasksv1connect.NewBoardServiceHandler(boardService, connect.WithInterceptors(interceptors...))
+	serveMux.Handle(path, handler)
+
+	var resolver *permission.Resolver
+	if cfg.IdmURL != "" {
+		resolver = permission.NewResolver(http.DefaultClient, cfg.IdmURL)
+	}
+
+	taskService, err := tasks.New(ctx, repo, resolver)
+	if err != nil {
+		logrus.Fatalf("failed to create task service: %s", err)
+	}
+
+	path, handler = tasksv1connect.NewTaskServiceHandler(taskService, connect.WithInterceptors(interceptors...))
 	serveMux.Handle(path, handler)
 
 	loggingHandler := func(next http.Handler) http.Handler {
