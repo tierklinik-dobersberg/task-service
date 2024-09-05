@@ -2,8 +2,10 @@ package mongo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"time"
 
@@ -334,27 +336,35 @@ func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuer
 		}
 	}
 
-	pipeline := mongo.Pipeline{
-		{
+	pipeline := mongo.Pipeline{}
+
+	if len(filter) > 0 {
+		pipeline = append(pipeline, bson.D{
 			{
 				Key:   "$match",
 				Value: filter,
 			},
-		},
+		})
+	}
+
+	pipeline = append(pipeline, bson.D{
 		{
-			{
-				Key: "$facet",
-				Value: bson.M{
-					"metadata": bson.D{
-						{
-							Key:   "$count",
-							Value: "totalCount",
-						},
-					},
-					"data": paginationPipeline,
+			Key: "$facet",
+			Value: bson.M{
+				"metadata": []bson.D{
+					{{
+						Key:   "$count",
+						Value: "totalCount",
+					}},
 				},
+				"data": paginationPipeline,
 			},
 		},
+	})
+
+	blob, err := json.MarshalIndent(pipeline, "", "   ")
+	if err == nil {
+		log.Println(string(blob))
 	}
 
 	res, err := db.tasks.Aggregate(ctx, pipeline)

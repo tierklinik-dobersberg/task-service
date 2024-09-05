@@ -11,6 +11,7 @@ func main() {
 
 	root.AddCommand(
 		cmds.GetBoardsCommand(root),
+		cmds.TasksCommand(root),
 	)
 
 	if err := root.Execute(); err != nil {
