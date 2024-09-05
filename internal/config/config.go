@@ -15,6 +15,7 @@ type Config struct {
 	MongoDBURL         string   `env:"MONGO_URL"`
 	MongoDatabaseName  string   `env:"MONGO_DATABASE, default=customer-service"`
 	UploadDirectory    string   `env:"DATA_DIRECTORY, required"`
+	EventsServiceUrl   string   `env:"EVENT_SERVICE_URL"`
 }
 
 func LoadConfig(ctx context.Context) (*Config, error) {

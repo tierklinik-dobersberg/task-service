@@ -80,19 +80,30 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}
 
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      model,
+		EventType: tasksv1.EventType_EVENT_TYPE_CREATED,
+	})
+
 	return connect.NewResponse(&tasksv1.CreateTaskResponse{
 		Task: model,
 	}), nil
 }
 
 func (svc *Service) DeleteTask(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskRequest]) (*connect.Response[emptypb.Empty], error) {
-	if _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
+	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
 		return nil, err
 	}
 
 	if err := svc.repo.DeleteTask(ctx, req.Msg.TaskId); err != nil {
 		return nil, err
 	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      task,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+	})
 
 	return connect.NewResponse(new(emptypb.Empty)), nil
 }
@@ -106,6 +117,11 @@ func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasks
 	if err != nil {
 		return nil, err
 	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      t,
+		EventType: tasksv1.EventType_EVENT_TYPE_COMPLETED,
+	})
 
 	return connect.NewResponse(&tasksv1.CompleteTaskResponse{
 		Task: t,
@@ -127,6 +143,11 @@ func (svc *Service) AssignTask(ctx context.Context, req *connect.Request[tasksv1
 		return nil, err
 	}
 
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      task,
+		EventType: tasksv1.EventType_EVENT_TYPE_ASSIGNEE_CHANGED,
+	})
+
 	return connect.NewResponse(&tasksv1.AssignTaskResponse{
 		Task: task,
 	}), nil
@@ -146,6 +167,11 @@ func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1
 	if err != nil {
 		return nil, err
 	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      t,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+	})
 
 	return connect.NewResponse(&tasksv1.UpdateTaskResponse{
 		Task: t,
@@ -218,6 +244,11 @@ func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[
 		return nil, err
 	}
 
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      task,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+	})
+
 	return connect.NewResponse(&tasksv1.AddTaskAttachmentResponse{
 		Task: task,
 	}), nil
@@ -233,6 +264,11 @@ func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return nil, err
 	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      task,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+	})
 
 	return connect.NewResponse(&tasksv1.DeleteTaskAttachmentResponse{
 		Task: task,

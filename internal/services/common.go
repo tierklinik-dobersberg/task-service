@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	connect "github.com/bufbuild/connect-go"
+	eventsv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/events/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/events/v1/eventsv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
+	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/config"
 	"github.com/tierklinik-dobersberg/task-service/internal/permission"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type Common struct {
@@ -61,4 +67,25 @@ func (svc *Common) IsAllowed(ctx context.Context, board *tasksv1.Board, op strin
 	}
 
 	return nil
+}
+
+func (svc *Common) PublishEvent(event proto.Message) {
+	if svc.Config.EventsServiceUrl == "" {
+		return
+	}
+
+	go func() {
+		cli := eventsv1connect.NewEventServiceClient(cli.NewInsecureHttp2Client(), svc.Config.EventsServiceUrl)
+
+		anypb, err := anypb.New(event)
+		if err != nil {
+			slog.Error("failed to prepare google.protobuf.Any for publishing", "error", err, "typeUrl", proto.MessageName(event))
+
+			return
+		}
+
+		cli.Publish(context.Background(), connect.NewRequest(&eventsv1.Event{
+			Event: anypb,
+		}))
+	}()
 }
