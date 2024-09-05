@@ -14,6 +14,9 @@ services:
       MONGO_DATABASE: "task-service"
       MONGO_URL: "mongodb://root:example@mongo/"
       DEBUG: "true"
+      DATA_DIRECTORY: /data
+    volumes:
+      - data:/data
 
   mongo:
     image: mongo
@@ -23,3 +26,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+
+volumes:
+  data:
