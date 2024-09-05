@@ -51,12 +51,13 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 	cr := req.Msg
 
 	model := &tasksv1.Board{
-		DisplayName:     cr.DisplayName,
-		Description:     cr.Description,
-		ReadPermission:  cr.ReadPermission,
-		WritePermission: cr.WritePermission,
-		Notifications:   cr.Notifications,
-		OwnerId:         remoteUser.ID,
+		DisplayName:       cr.DisplayName,
+		Description:       cr.Description,
+		ReadPermission:    cr.ReadPermission,
+		WritePermission:   cr.WritePermission,
+		Notifications:     cr.Notifications,
+		OwnerId:           remoteUser.ID,
+		AllowedTaskStatus: cr.AllowedTaskStatus,
 	}
 	if err := svc.repo.CreateBoard(ctx, model); err != nil {
 		return nil, err

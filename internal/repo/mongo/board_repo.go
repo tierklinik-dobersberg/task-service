@@ -215,7 +215,7 @@ func (db *Repository) DeleteNotification(ctx context.Context, boardID, notificat
 }
 
 // Compile-time check
-var _ repo.Backend = (*Repository)(nil)
+var _ repo.BoardBackend = (*Repository)(nil)
 
 func convertErr(err error) error {
 	if err == nil {

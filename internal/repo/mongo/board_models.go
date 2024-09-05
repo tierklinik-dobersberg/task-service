@@ -25,6 +25,11 @@ type (
 		NotificationType tasksv1.NotificationType `bson:"notificationType"`
 	}
 
+	TaskStatus struct {
+		Status      string `bson:"status"`
+		Description string `bson:"description,omitempty"`
+	}
+
 	Board struct {
 		ID               primitive.ObjectID  `bson:"_id,omitempty"`
 		DisplayName      string              `bson:"displayName,omitempty"`
@@ -33,8 +38,23 @@ type (
 		ReadPermissions  *BoardPermission    `bson:"readPermissions,omitempty"`
 		Notifications    []BoardNotification `bson:"notifications"`
 		OwnerID          string              `bson:"ownerId"`
+		TaskStatuses     []TaskStatus        `bson:"statuses,omitempty"`
 	}
 )
+
+func (status *TaskStatus) ToProto() *tasksv1.TaskStatus {
+	return &tasksv1.TaskStatus{
+		Status:      status.Status,
+		Description: status.Description,
+	}
+}
+
+func statusFromProto(pb *tasksv1.TaskStatus) *TaskStatus {
+	return &TaskStatus{
+		Status:      pb.Status,
+		Description: pb.Description,
+	}
+}
 
 func (perm *BoardPermission) ToProto() *tasksv1.BoardPermission {
 	if perm == nil {
@@ -92,18 +112,23 @@ func notificationFromProto(pb *tasksv1.BoardNotification) *BoardNotification {
 
 func (b *Board) ToProto() *tasksv1.Board {
 	pb := &tasksv1.Board{
-		Id:              b.ID.Hex(),
-		DisplayName:     b.DisplayName,
-		Description:     b.Description,
-		Kind:            &tasksv1.Board_List{},
-		ReadPermission:  b.ReadPermissions.ToProto(),
-		WritePermission: b.WritePermissions.ToProto(),
-		OwnerId:         b.OwnerID,
-		Notifications:   make([]*tasksv1.BoardNotification, len(b.Notifications)),
+		Id:                b.ID.Hex(),
+		DisplayName:       b.DisplayName,
+		Description:       b.Description,
+		Kind:              &tasksv1.Board_List{},
+		ReadPermission:    b.ReadPermissions.ToProto(),
+		WritePermission:   b.WritePermissions.ToProto(),
+		OwnerId:           b.OwnerID,
+		Notifications:     make([]*tasksv1.BoardNotification, len(b.Notifications)),
+		AllowedTaskStatus: make([]*tasksv1.TaskStatus, len(b.TaskStatuses)),
 	}
 
 	for idx, n := range b.Notifications {
 		pb.Notifications[idx] = n.ToProto()
+	}
+
+	for idx, s := range b.TaskStatuses {
+		pb.AllowedTaskStatus[idx] = s.ToProto()
 	}
 
 	return pb
@@ -126,11 +151,16 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		WritePermissions: permissionsFromProto(pb.WritePermission),
 		ReadPermissions:  permissionsFromProto(pb.ReadPermission),
 		Notifications:    make([]BoardNotification, len(pb.Notifications)),
+		TaskStatuses:     make([]TaskStatus, len(pb.AllowedTaskStatus)),
 		OwnerID:          pb.OwnerId,
 	}
 
 	for idx, n := range pb.Notifications {
 		b.Notifications[idx] = *notificationFromProto(n)
+	}
+
+	for idx, s := range pb.AllowedTaskStatus {
+		b.TaskStatuses[idx] = *statusFromProto(s)
 	}
 
 	return b, nil

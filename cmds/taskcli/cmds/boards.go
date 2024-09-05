@@ -53,20 +53,27 @@ func CreateBoardCommand(root *cli.Root) *cobra.Command {
 	var req = &tasksv1.CreateBoardRequest{
 		WritePermission: &tasksv1.BoardPermission{},
 		ReadPermission:  &tasksv1.BoardPermission{},
+		Kind:            &tasksv1.CreateBoardRequest_List{},
 	}
+
+	var (
+		noResolve bool
+	)
 
 	cmd := &cobra.Command{
 		Use: "create",
 		Run: func(cmd *cobra.Command, args []string) {
-			req.WritePermission.AllowRoles = root.MustResolveRoleIds(req.WritePermission.AllowRoles)
-			req.WritePermission.DenyRoles = root.MustResolveRoleIds(req.WritePermission.DenyRoles)
-			req.WritePermission.AllowUsers = root.MustResolveUserIds(req.WritePermission.AllowUsers)
-			req.WritePermission.DenyUsers = root.MustResolveUserIds(req.WritePermission.DenyUsers)
+			if !noResolve {
+				req.WritePermission.AllowRoles = root.MustResolveRoleIds(req.WritePermission.AllowRoles)
+				req.WritePermission.DenyRoles = root.MustResolveRoleIds(req.WritePermission.DenyRoles)
+				req.WritePermission.AllowUsers = root.MustResolveUserIds(req.WritePermission.AllowUsers)
+				req.WritePermission.DenyUsers = root.MustResolveUserIds(req.WritePermission.DenyUsers)
 
-			req.ReadPermission.AllowRoles = root.MustResolveRoleIds(req.ReadPermission.AllowRoles)
-			req.ReadPermission.DenyRoles = root.MustResolveRoleIds(req.ReadPermission.DenyRoles)
-			req.ReadPermission.AllowUsers = root.MustResolveUserIds(req.ReadPermission.AllowUsers)
-			req.ReadPermission.DenyUsers = root.MustResolveUserIds(req.ReadPermission.DenyUsers)
+				req.ReadPermission.AllowRoles = root.MustResolveRoleIds(req.ReadPermission.AllowRoles)
+				req.ReadPermission.DenyRoles = root.MustResolveRoleIds(req.ReadPermission.DenyRoles)
+				req.ReadPermission.AllowUsers = root.MustResolveUserIds(req.ReadPermission.AllowUsers)
+				req.ReadPermission.DenyUsers = root.MustResolveUserIds(req.ReadPermission.DenyUsers)
+			}
 
 			cli := root.Boards()
 
@@ -93,6 +100,8 @@ func CreateBoardCommand(root *cli.Root) *cobra.Command {
 		f.StringSliceVar(&req.ReadPermission.AllowUsers, "read-allow-users", nil, "")
 		f.StringSliceVar(&req.ReadPermission.DenyRoles, "read-deny-roles", nil, "")
 		f.StringSliceVar(&req.ReadPermission.DenyUsers, "read-deny-users", nil, "")
+
+		f.BoolVar(&noResolve, "no-resolve-ids", false, "Do not try to resolve user or role ids")
 	}
 
 	return cmd
@@ -125,6 +134,7 @@ func AddNotificationCommand(root *cli.Root) *cobra.Command {
 		sendTimes        []string
 		eventTypes       []string
 		notificationType string
+		noResolve        bool
 	)
 
 	cmd := &cobra.Command{
@@ -189,8 +199,10 @@ func AddNotificationCommand(root *cli.Root) *cobra.Command {
 				req.EventTypes = append(req.EventTypes, e)
 			}
 
-			req.RecipientRoleIds = root.MustResolveRoleIds(req.RecipientRoleIds)
-			req.RecipientUserIds = root.MustResolveUserIds(req.RecipientUserIds)
+			if !noResolve {
+				req.RecipientRoleIds = root.MustResolveRoleIds(req.RecipientRoleIds)
+				req.RecipientUserIds = root.MustResolveUserIds(req.RecipientUserIds)
+			}
 
 			cli := root.Boards()
 
@@ -217,6 +229,7 @@ func AddNotificationCommand(root *cli.Root) *cobra.Command {
 		f.StringSliceVar(&sendTimes, "send-at", nil, "A list of time-of-day at which to send notifications")
 		f.StringSliceVar(&eventTypes, "event", nil, "A list of event type to send notifications for")
 		f.StringVar(&notificationType, "type", "sms", "Which notification type to use: sms, mail or webpush")
+		f.BoolVar(&noResolve, "no-resolve-ids", false, "Do not try to resolve role and user ids")
 	}
 
 	return cmd
