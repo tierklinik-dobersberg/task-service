@@ -14,6 +14,7 @@ type Config struct {
 	AllowedOrigins     []string `env:"ALLOWED_ORIGINS, default=*"`
 	MongoDBURL         string   `env:"MONGO_URL"`
 	MongoDatabaseName  string   `env:"MONGO_DATABASE, default=customer-service"`
+	UploadDirectory    string   `env:"DATA_DIRECTORY, required"`
 }
 
 func LoadConfig(ctx context.Context) (*Config, error) {

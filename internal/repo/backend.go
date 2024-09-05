@@ -65,6 +65,12 @@ type TaskBackend interface {
 	// task queriers. The queries are passes as the are since different backend implementations
 	// might be able to apply optimizations when search for multiple tasks.
 	ListTasks(context.Context, []*tasksv1.TaskQuery, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
+
+	// AddTaskAttachment adds a new attachment to a task
+	AddTaskAttachment(context.Context, string, string, *tasksv1.Attachment) (*tasksv1.Task, error)
+
+	// DeleteTaskAttachment deletes an attachment from a task.
+	DeleteTaskAttachment(context.Context, string, string) (*tasksv1.Task, error)
 }
 
 type Backend interface {

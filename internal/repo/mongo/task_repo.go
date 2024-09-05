@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/protobuf/proto"
 )
 
 func (db *Repository) CreateTask(ctx context.Context, task *tasksv1.Task) error {
@@ -157,6 +158,8 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 		"delete_tags",
 		"status",
 		"due_time",
+		"add_properties",
+		"delete_properties",
 	}
 
 	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
@@ -200,6 +203,21 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				setModel["dueTime"] = update.DueTime.AsTime()
 			} else {
 				unsetModel["dueTime"] = ""
+			}
+
+		case "add_properties":
+			for _, property := range update.AddProperties {
+				blob, err := proto.Marshal(property.Value)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal property value for %q: %w", property.Key, err)
+				}
+
+				setModel["properties."+property.Key] = blob
+			}
+
+		case "delete_properties":
+			for _, prop := range update.DeleteProperties {
+				unsetModel["properties."+prop] = ""
 			}
 
 		default:
@@ -290,6 +308,12 @@ func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuer
 		if q.DueBefore.IsValid() {
 			filter["dueTime"] = bson.M{
 				"$lte": q.DueBefore.AsTime(),
+			}
+		}
+
+		if q.Completed != nil {
+			filter["completeTime"] = bson.M{
+				"$exists": q.Completed.Value,
 			}
 		}
 
@@ -403,6 +427,74 @@ func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuer
 	}
 
 	return pbResult, count, nil
+}
+
+func (db *Repository) AddTaskAttachment(ctx context.Context, taskID, filePath string, attachment *tasksv1.Attachment) (*tasksv1.Task, error) {
+	oid, err := primitive.ObjectIDFromHex(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse task id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"attachments": attachmentFromProto(attachment),
+		},
+	}
+
+	res := db.tasks.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrTaskNotFound
+		}
+
+		return nil, err
+	}
+
+	var t Task
+	if err := res.Decode(&t); err != nil {
+		return nil, fmt.Errorf("failed to decode task document: %w", err)
+	}
+
+	return t.ToProto(), nil
+}
+
+func (db *Repository) DeleteTaskAttachment(ctx context.Context, taskID, attachmentName string) (*tasksv1.Task, error) {
+	oid, err := primitive.ObjectIDFromHex(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse task id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"attachments": bson.M{
+				"name": attachmentName,
+			},
+		},
+	}
+
+	res := db.tasks.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrTaskNotFound
+		}
+
+		return nil, err
+	}
+
+	var t Task
+	if err := res.Decode(&t); err != nil {
+		return nil, fmt.Errorf("failed to decode task document: %w", err)
+	}
+
+	return t.ToProto(), nil
 }
 
 var _ repo.TaskBackend = (*Repository)(nil)

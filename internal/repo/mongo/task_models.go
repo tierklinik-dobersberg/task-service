@@ -1,12 +1,15 @@
 package mongo
 
 import (
+	"log/slog"
 	"time"
 
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	customerv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/customer/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -21,6 +24,12 @@ type (
 		City       string `bson:"city"`
 		Street     string `bson:"street"`
 		Extra      string `bson:"extra,omitempty"`
+	}
+
+	Attachment struct {
+		Filename    string `bson:"filename"`
+		Name        string `bson:"name"`
+		ContentType string `bson:"contentType"`
 	}
 
 	Task struct {
@@ -40,8 +49,32 @@ type (
 		UpdateTime   time.Time          `bson:"updateTime"`
 		AssignTime   time.Time          `bson:"assignTime,omitempty"`
 		CompleteTime time.Time          `bson:"completeTime,omitempty"`
+		Properties   map[string][]byte  `bson:"properties,omitempty"`
+		Attachments  []Attachment       `bson:"attachments,omitempty"`
 	}
 )
+
+func (at *Attachment) ToProto() *tasksv1.Attachment {
+	if at == nil {
+		return nil
+	}
+
+	return &tasksv1.Attachment{
+		Name:        at.Name,
+		ContentType: at.ContentType,
+	}
+}
+
+func attachmentFromProto(pb *tasksv1.Attachment) *Attachment {
+	if pb == nil {
+		return nil
+	}
+
+	return &Attachment{
+		Name:        pb.Name,
+		ContentType: pb.ContentType,
+	}
+}
 
 func (geo *GeoLocation) ToProto() *commonv1.GeoLocation {
 	if geo == nil {
@@ -127,6 +160,25 @@ func (task *Task) ToProto() *tasksv1.Task {
 		pb.DueTime = timestamppb.New(task.DueTime)
 	}
 
+	for _, attach := range task.Attachments {
+		pb.Attachments = append(pb.Attachments, attach.ToProto())
+	}
+
+	if len(task.Properties) > 0 {
+		pb.Properties = make(map[string]*anypb.Any, len(task.Properties))
+
+		for key, value := range task.Properties {
+			var anyPb anypb.Any
+
+			if err := proto.Unmarshal(value, &anyPb); err != nil {
+				slog.Error("failed to unmarshal google.protobuf.Any from bytes", "key", key, "error", err)
+				continue
+			}
+
+			pb.Properties[key] = &anyPb
+		}
+	}
+
 	return pb
 }
 
@@ -172,6 +224,24 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 		t.Address = addrFromProto(v.Address)
 	case *tasksv1.Task_GeoLocation:
 		t.GeoLocation = geoLocationFromProto(v.GeoLocation)
+	}
+
+	for _, at := range pb.Attachments {
+		t.Attachments = append(t.Attachments, *attachmentFromProto(at))
+	}
+
+	if len(pb.Properties) > 0 {
+		t.Properties = make(map[string][]byte)
+
+		for key, value := range pb.Properties {
+			blob, err := proto.Marshal(value)
+			if err != nil {
+				slog.Error("failed to marsahl google.protobuf.Any as bytes", "key", key, "error", err)
+				continue
+			}
+
+			t.Properties[key] = blob
+		}
 	}
 
 	return t, nil

@@ -15,9 +15,14 @@ import (
 
 func TasksCommand(root *cli.Root) *cobra.Command {
 	var (
+		// Pagination
 		pageSize int
 		page     int
 		sort     []string
+
+		// Filter
+		query     = &tasksv1.TaskQuery{}
+		noResolve bool
 	)
 
 	cmd := &cobra.Command{
@@ -61,7 +66,13 @@ func TasksCommand(root *cli.Root) *cobra.Command {
 				}
 			}
 
+			if !noResolve {
+				query.AssignedTo = root.MustResolveUserIds(query.AssignedTo)
+				query.CreatedBy = root.MustResolveUserIds(query.CreatedBy)
+			}
+
 			res, err := cli.ListTasks(root.Context(), connect.NewRequest(&tasksv1.ListTasksRequest{
+				Queries:    []*tasksv1.TaskQuery{query},
 				Pagination: pagination,
 			}))
 			if err != nil {
@@ -74,13 +85,27 @@ func TasksCommand(root *cli.Root) *cobra.Command {
 
 	f := cmd.Flags()
 	{
+		// Pagination
 		f.IntVar(&pageSize, "page-size", 0, "")
 		f.IntVar(&page, "page", 0, "")
 		f.StringSliceVar(&sort, "sort", nil, "")
+
+		// Query
+		f.StringSliceVar(&query.Tags, "tag", nil, "")
+		f.StringSliceVar(&query.AssignedTo, "assignee", nil, "")
+		f.StringSliceVar(&query.Statuses, "status", nil, "")
+		f.StringSliceVar(&query.CreatedBy, "created-by", nil, "")
+		f.StringSliceVar(&query.BoardId, "board", nil, "")
+
+		f.BoolVar(&noResolve, "no-resolve-ids", false, "")
 	}
 
 	cmd.AddCommand(
 		CreateTaskCommand(root),
+		CompleteTaskCommand(root),
+		DeleteTaskCommand(root),
+		CompleteTaskCommand(root),
+		AssignTaskCommand(root),
 	)
 
 	return cmd
@@ -136,6 +161,64 @@ func CreateTaskCommand(root *cli.Root) *cobra.Command {
 		f.StringVar(&req.Status, "status", "", "")
 		f.StringSliceVar(&req.Tags, "tag", nil, "")
 		f.BoolVar(&noResolve, "no-resolve-ids", false, "Do not resolve user ids")
+	}
+
+	return cmd
+}
+
+func CompleteTaskCommand(root *cli.Root) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:  "complete id",
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			res, err := root.Tasks().CompleteTask(root.Context(), connect.NewRequest(&tasksv1.CompleteTaskRequest{
+				TaskId: args[0],
+			}))
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
+			root.Print(res.Msg)
+		},
+	}
+
+	return cmd
+}
+
+func DeleteTaskCommand(root *cli.Root) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:  "delete id",
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			res, err := root.Tasks().DeleteTask(root.Context(), connect.NewRequest(&tasksv1.DeleteTaskRequest{
+				TaskId: args[0],
+			}))
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
+			root.Print(res.Msg)
+		},
+	}
+
+	return cmd
+}
+
+func AssignTaskCommand(root *cli.Root) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:  "assign",
+		Args: cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			res, err := root.Tasks().AssignTask(root.Context(), connect.NewRequest(&tasksv1.AssignTaskRequest{
+				TaskId:     args[0],
+				AssigneeId: args[1],
+			}))
+			if err != nil {
+				logrus.Fatal(err)
+			}
+
+			root.Print(res.Msg)
+		},
 	}
 
 	return cmd

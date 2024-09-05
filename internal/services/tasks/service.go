@@ -1,15 +1,19 @@
 package tasks
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/bufbuild/connect-go"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
+	"github.com/tierklinik-dobersberg/task-service/internal/config"
 	"github.com/tierklinik-dobersberg/task-service/internal/permission"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -19,11 +23,12 @@ import (
 type Service struct {
 	tasksv1connect.UnimplementedTaskServiceHandler
 
+	cfg      config.Config
 	repo     repo.Backend
 	resolver *permission.Resolver
 }
 
-func New(ctx context.Context, repo repo.Backend, resolver *permission.Resolver) (*Service, error) {
+func New(ctx context.Context, cfg config.Config, repo repo.Backend, resolver *permission.Resolver) (*Service, error) {
 	return &Service{repo: repo, resolver: resolver}, nil
 }
 
@@ -182,6 +187,56 @@ func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.
 
 	return connect.NewResponse(&tasksv1.ListTasksResponse{
 		Tasks: results,
+	}), nil
+}
+
+func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[tasksv1.AddTaskAttachmentRequest]) (*connect.Response[tasksv1.AddTaskAttachmentResponse], error) {
+	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
+		return nil, err
+	}
+
+	file := filepath.Join(
+		svc.cfg.UploadDirectory,
+		fmt.Sprintf("%s-%s", task.Id, req.Msg.Name),
+	)
+
+	f, err := os.Create(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, bytes.NewReader(req.Msg.Content)); err != nil {
+		return nil, err
+	}
+
+	task, err = svc.repo.AddTaskAttachment(ctx, task.Id, file, &tasksv1.Attachment{
+		Name:        req.Msg.Name,
+		ContentType: req.Msg.ContentType,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&tasksv1.AddTaskAttachmentResponse{
+		Task: task,
+	}), nil
+}
+
+func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskAttachmentRequest]) (*connect.Response[tasksv1.DeleteTaskAttachmentResponse], error) {
+	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
+		return nil, err
+	}
+
+	task, err = svc.repo.DeleteTaskAttachment(ctx, task.Id, req.Msg.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&tasksv1.DeleteTaskAttachmentResponse{
+		Task: task,
 	}), nil
 }
 
