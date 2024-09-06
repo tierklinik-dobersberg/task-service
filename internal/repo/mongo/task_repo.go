@@ -269,7 +269,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 	return t.ToProto(), nil
 }
 
-func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuery, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+func (db *Repository) buildQueryFilter(queries []*tasksv1.TaskQuery) (bson.M, error) {
 	mongoQueries := bson.A{}
 
 	for _, q := range queries {
@@ -329,6 +329,15 @@ func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuer
 		filter = mongoQueries[0].(bson.M)
 	default:
 		filter["$or"] = mongoQueries
+	}
+
+	return filter, nil
+}
+
+func (db *Repository) ListTasks(ctx context.Context, queries []*tasksv1.TaskQuery, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+	filter, err := db.buildQueryFilter(queries)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to build task query: %w", err)
 	}
 
 	paginationPipeline := mongo.Pipeline{}
@@ -495,6 +504,17 @@ func (db *Repository) DeleteTaskAttachment(ctx context.Context, taskID, attachme
 	}
 
 	return t.ToProto(), nil
+}
+
+func (db *Repository) DeleteTasksMatchingQuery(ctx context.Context, queries []*tasksv1.TaskQuery) error {
+	filter, err := db.buildQueryFilter(queries)
+	if err != nil {
+		return fmt.Errorf("failed to build task query: %w", err)
+	}
+
+	_, err = db.tasks.DeleteMany(ctx, filter)
+
+	return err
 }
 
 var _ repo.TaskBackend = (*Repository)(nil)

@@ -190,7 +190,7 @@ func (svc *Service) GetTask(ctx context.Context, req *connect.Request[tasksv1.Ge
 }
 
 func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.ListTasksRequest]) (*connect.Response[tasksv1.ListTasksResponse], error) {
-	res, _, err := svc.repo.ListTasks(ctx, req.Msg.Queries, req.Msg.Pagination)
+	res, count, err := svc.repo.ListTasks(ctx, req.Msg.Queries, req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,8 @@ func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.
 	}
 
 	return connect.NewResponse(&tasksv1.ListTasksResponse{
-		Tasks: results,
+		Tasks:      results,
+		TotalCount: int64(count),
 	}), nil
 }
 

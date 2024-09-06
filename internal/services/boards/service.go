@@ -95,6 +95,16 @@ func (svc *Service) DeleteBoard(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
+	// Delete all tasks associated with the board to delete
+	if err := svc.repo.DeleteTasksMatchingQuery(ctx, []*tasksv1.TaskQuery{
+		{
+			BoardId: []string{req.Msg.Id},
+		},
+	}); err != nil {
+		return nil, err
+	}
+
+	// Finally, delete the board itself.
 	if err := svc.repo.DeleteBoard(ctx, req.Msg.Id); err != nil {
 		return nil, err
 	}

@@ -71,6 +71,10 @@ type TaskBackend interface {
 
 	// DeleteTaskAttachment deletes an attachment from a task.
 	DeleteTaskAttachment(context.Context, string, string) (*tasksv1.Task, error)
+
+	// DeleteTaskMatchingQuery deletes all tasks that match one of queries.
+	// DANGEROURS: use with care!
+	DeleteTasksMatchingQuery(ctx context.Context, queries []*tasksv1.TaskQuery) error
 }
 
 type Backend interface {
