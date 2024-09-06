@@ -8,7 +8,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
-	github.com/tierklinik-dobersberg/apis v0.0.51
+	github.com/tierklinik-dobersberg/apis v0.0.52-0.20240906105455-de06fb5e4009
 	go.mongodb.org/mongo-driver v1.16.1
 	google.golang.org/protobuf v1.34.2
 )
@@ -33,9 +33,9 @@ require (
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
 	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // indirect
-	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
