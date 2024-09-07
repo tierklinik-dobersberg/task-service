@@ -517,4 +517,40 @@ func (db *Repository) DeleteTasksMatchingQuery(ctx context.Context, queries []*t
 	return err
 }
 
+func (db *Repository) DeleteTagsFromTasks(ctx context.Context, boardId string, tag string) error {
+	_, err := db.tasks.UpdateMany(
+		ctx,
+		bson.M{"boardId": boardId},
+		bson.M{
+			"$pull": bson.M{
+				"tags": tag,
+			},
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Repository) DeleteStatusFromTasks(ctx context.Context, boardId string, status string) error {
+	_, err := db.tasks.UpdateMany(
+		ctx,
+		bson.M{"boardId": boardId, "status": status},
+		bson.M{
+			"$unset": bson.M{
+				"status": "",
+			},
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 var _ repo.TaskBackend = (*Repository)(nil)

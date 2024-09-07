@@ -214,6 +214,184 @@ func (db *Repository) DeleteNotification(ctx context.Context, boardID, notificat
 	return b.ToProto(), nil
 }
 
+func (db *Repository) AddTaskStatus(ctx context.Context, boardId string, status *tasksv1.TaskStatus) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse board id: %w", err)
+	}
+
+	model := statusFromProto(status)
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+		"$set": bson.M{
+			"statuses.$[filter]": model,
+		},
+	}, options.Update().SetArrayFilters(options.ArrayFilters{
+		Filters: []any{
+			bson.M{
+				"filter.status": model.Status,
+			},
+		},
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+	}
+
+	if replaceResult.ModifiedCount > 0 {
+		return db.GetBoard(ctx, boardId)
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"statuses": model,
+		},
+	}
+
+	res, err := db.boards.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	if res.MatchedCount == 0 {
+		return nil, repo.ErrBoardNotFound
+	}
+
+	return db.GetBoard(ctx, boardId)
+}
+
+func (db *Repository) DeleteTaskStatus(ctx context.Context, boardID, status string) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(boardID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid board id: %w", err)
+	}
+
+	// first, unset the status from all tasks
+	if err := db.DeleteStatusFromTasks(ctx, boardID, status); err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"statuses": bson.M{
+				"status": status,
+			},
+		},
+	}
+
+	res := db.boards.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrBoardNotFound
+		}
+
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	var b Board
+	if err := res.Decode(&b); err != nil {
+		return nil, fmt.Errorf("failed to decode board: %w", err)
+	}
+
+	return b.ToProto(), nil
+}
+
+func (db *Repository) AddTaskTag(ctx context.Context, boardId string, tag *tasksv1.TaskTag) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse board id: %w", err)
+	}
+
+	model := tagFromProto(tag)
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+		"$set": bson.M{
+			"tags.$[filter]": model,
+		},
+	}, options.Update().SetArrayFilters(options.ArrayFilters{
+		Filters: []any{
+			bson.M{
+				"filter.tag": model.Tag,
+			},
+		},
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+	}
+
+	if replaceResult.ModifiedCount > 0 {
+		return db.GetBoard(ctx, boardId)
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"tags": model,
+		},
+	}
+
+	res, err := db.boards.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	if res.MatchedCount == 0 {
+		return nil, repo.ErrBoardNotFound
+	}
+
+	return db.GetBoard(ctx, boardId)
+}
+
+func (db *Repository) DeleteTaskTag(ctx context.Context, boardID, tag string) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(boardID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid board id: %w", err)
+	}
+
+	// first, delete the tag from all tasks
+	if err := db.DeleteTagsFromTasks(ctx, boardID, tag); err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"tags": bson.M{
+				"tag": tag,
+			},
+		},
+	}
+
+	res := db.boards.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrBoardNotFound
+		}
+
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	var b Board
+	if err := res.Decode(&b); err != nil {
+		return nil, fmt.Errorf("failed to decode board: %w", err)
+	}
+
+	return b.ToProto(), nil
+}
+
 // Compile-time check
 var _ repo.BoardBackend = (*Repository)(nil)
 

@@ -28,6 +28,13 @@ type (
 	TaskStatus struct {
 		Status      string `bson:"status"`
 		Description string `bson:"description,omitempty"`
+		Color       string `bson:"color"`
+	}
+
+	TaskTag struct {
+		Tag         string `bson:"tag"`
+		Description string `bson:"description,omitempty"`
+		Color       string `bson:"color"`
 	}
 
 	Board struct {
@@ -39,13 +46,31 @@ type (
 		Notifications    []BoardNotification `bson:"notifications"`
 		OwnerID          string              `bson:"ownerId"`
 		TaskStatuses     []TaskStatus        `bson:"statuses,omitempty"`
+		TaskTags         []TaskTag           `bson:"tags,omitempty"`
 	}
 )
+
+func (tag *TaskTag) ToProto() *tasksv1.TaskTag {
+	return &tasksv1.TaskTag{
+		Tag:         tag.Tag,
+		Description: tag.Description,
+		Color:       tag.Color,
+	}
+}
+
+func tagFromProto(pb *tasksv1.TaskTag) *TaskTag {
+	return &TaskTag{
+		Tag:         pb.Tag,
+		Description: pb.Description,
+		Color:       pb.Color,
+	}
+}
 
 func (status *TaskStatus) ToProto() *tasksv1.TaskStatus {
 	return &tasksv1.TaskStatus{
 		Status:      status.Status,
 		Description: status.Description,
+		Color:       status.Color,
 	}
 }
 
@@ -121,6 +146,7 @@ func (b *Board) ToProto() *tasksv1.Board {
 		OwnerId:           b.OwnerID,
 		Notifications:     make([]*tasksv1.BoardNotification, len(b.Notifications)),
 		AllowedTaskStatus: make([]*tasksv1.TaskStatus, len(b.TaskStatuses)),
+		AllowedTaskTags:   make([]*tasksv1.TaskTag, len(b.TaskTags)),
 	}
 
 	for idx, n := range b.Notifications {
@@ -129,6 +155,10 @@ func (b *Board) ToProto() *tasksv1.Board {
 
 	for idx, s := range b.TaskStatuses {
 		pb.AllowedTaskStatus[idx] = s.ToProto()
+	}
+
+	for idx, t := range b.TaskTags {
+		pb.AllowedTaskTags[idx] = t.ToProto()
 	}
 
 	return pb
@@ -152,6 +182,7 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		ReadPermissions:  permissionsFromProto(pb.ReadPermission),
 		Notifications:    make([]BoardNotification, len(pb.Notifications)),
 		TaskStatuses:     make([]TaskStatus, len(pb.AllowedTaskStatus)),
+		TaskTags:         make([]TaskTag, len(pb.AllowedTaskTags)),
 		OwnerID:          pb.OwnerId,
 	}
 
@@ -161,6 +192,10 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 
 	for idx, s := range pb.AllowedTaskStatus {
 		b.TaskStatuses[idx] = *statusFromProto(s)
+	}
+
+	for idx, t := range pb.AllowedTaskTags {
+		b.TaskTags[idx] = *tagFromProto(t)
 	}
 
 	return b, nil

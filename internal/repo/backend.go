@@ -34,6 +34,11 @@ type BoardBackend interface {
 	// DeleteNotification deletes a board notification identified by the board ID and
 	// the notification name.
 	DeleteNotification(context.Context, string, string) (*tasksv1.Board, error)
+
+	AddTaskStatus(context.Context, string, *tasksv1.TaskStatus) (*tasksv1.Board, error)
+	DeleteTaskStatus(context.Context, string, string) (*tasksv1.Board, error)
+	AddTaskTag(context.Context, string, *tasksv1.TaskTag) (*tasksv1.Board, error)
+	DeleteTaskTag(context.Context, string, string) (*tasksv1.Board, error)
 }
 
 type TaskBackend interface {
@@ -75,6 +80,9 @@ type TaskBackend interface {
 	// DeleteTaskMatchingQuery deletes all tasks that match one of queries.
 	// DANGEROURS: use with care!
 	DeleteTasksMatchingQuery(ctx context.Context, queries []*tasksv1.TaskQuery) error
+
+	DeleteTagsFromTasks(ctx context.Context, boardId, tag string) error
+	DeleteStatusFromTasks(ctx context.Context, boardId, status string) error
 }
 
 type Backend interface {

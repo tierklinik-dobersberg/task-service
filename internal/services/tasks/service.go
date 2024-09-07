@@ -32,7 +32,8 @@ func New(ctx context.Context, repo repo.Backend, common *services.Common) (*Serv
 }
 
 func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1.CreateTaskRequest]) (*connect.Response[tasksv1.CreateTaskResponse], error) {
-	if err := svc.ensureBoardPermissions(ctx, req.Msg.BoardId, "write"); err != nil {
+	board, err := svc.ensureBoardPermissions(ctx, req.Msg.BoardId, "write")
+	if err != nil {
 		return nil, err
 	}
 
@@ -53,6 +54,17 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		UpdateTime:  timestamppb.Now(),
 		Status:      r.Status,
 		Attachments: r.Attachments,
+	}
+
+	// validate tags and status
+	if r.Status != "" {
+		if err := validateBoardStatus(board, r.Status); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := validateBoardTags(board, r.Tags); err != nil {
+		return nil, err
 	}
 
 	switch v := r.Location.(type) {
@@ -91,7 +103,7 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) DeleteTask(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskRequest]) (*connect.Response[emptypb.Empty], error) {
-	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +121,7 @@ func (svc *Service) DeleteTask(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasksv1.CompleteTaskRequest]) (*connect.Response[tasksv1.CompleteTaskResponse], error) {
-	if _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
+	if _, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
 		return nil, err
 	}
 
@@ -129,7 +141,7 @@ func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasks
 }
 
 func (svc *Service) AssignTask(ctx context.Context, req *connect.Request[tasksv1.AssignTaskRequest]) (*connect.Response[tasksv1.AssignTaskResponse], error) {
-	if _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
+	if _, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
 		return nil, err
 	}
 
@@ -154,13 +166,24 @@ func (svc *Service) AssignTask(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1.UpdateTaskRequest]) (*connect.Response[tasksv1.UpdateTaskResponse], error) {
-	if _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
+	_, board, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
 		return nil, err
 	}
 
 	var id string
 	if r := auth.From(ctx); r != nil {
 		id = r.ID
+	}
+
+	if err := validateBoardTags(board, req.Msg.AddTags); err != nil {
+		return nil, err
+	}
+
+	if req.Msg.Status != "" {
+		if err := validateBoardStatus(board, req.Msg.Status); err != nil {
+			return nil, err
+		}
 	}
 
 	t, err := svc.repo.UpdateTask(ctx, id, req.Msg)
@@ -179,7 +202,7 @@ func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) GetTask(ctx context.Context, req *connect.Request[tasksv1.GetTaskRequest]) (*connect.Response[tasksv1.GetTaskResponse], error) {
-	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "read")
+	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "read")
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +224,7 @@ func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.
 	for _, r := range res {
 		err, ok := boards[r.BoardId]
 		if !ok {
-			err = svc.ensureBoardPermissions(ctx, r.BoardId, "read")
+			_, err = svc.ensureBoardPermissions(ctx, r.BoardId, "read")
 			boards[r.BoardId] = err
 		}
 
@@ -217,7 +240,7 @@ func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.
 }
 
 func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[tasksv1.AddTaskAttachmentRequest]) (*connect.Response[tasksv1.AddTaskAttachmentResponse], error) {
-	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +279,7 @@ func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[
 }
 
 func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskAttachmentRequest]) (*connect.Response[tasksv1.DeleteTaskAttachmentResponse], error) {
-	task, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
 	if err != nil {
 		return nil, err
 	}
@@ -276,28 +299,54 @@ func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Reque
 	}), nil
 }
 
-func (svc *Service) ensureBoardPermissions(ctx context.Context, boardID string, op string) error {
+func (svc *Service) ensureBoardPermissions(ctx context.Context, boardID string, op string) (*tasksv1.Board, error) {
 	board, err := svc.repo.GetBoard(ctx, boardID)
 	if err != nil {
 		if errors.Is(err, repo.ErrBoardNotFound) {
-			return connect.NewError(connect.CodeNotFound, err)
-		}
-
-		return err
-	}
-
-	return svc.IsAllowed(ctx, board, op)
-}
-
-func (svc *Service) ensureTaskPermissions(ctx context.Context, taskID string, op string) (*tasksv1.Task, error) {
-	task, err := svc.repo.GetTask(ctx, taskID)
-	if err != nil {
-		if errors.Is(err, repo.ErrTaskNotFound) {
 			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
 
 		return nil, err
 	}
 
-	return task, svc.ensureBoardPermissions(ctx, task.BoardId, op)
+	return board, svc.IsAllowed(ctx, board, op)
+}
+
+func (svc *Service) ensureTaskPermissions(ctx context.Context, taskID string, op string) (*tasksv1.Task, *tasksv1.Board, error) {
+	task, err := svc.repo.GetTask(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, repo.ErrTaskNotFound) {
+			return nil, nil, connect.NewError(connect.CodeNotFound, err)
+		}
+
+		return nil, nil, err
+	}
+
+	board, err := svc.ensureBoardPermissions(ctx, task.BoardId, op)
+	return task, board, err
+}
+
+func validateBoardTags(board *tasksv1.Board, tags []string) error {
+	lm := make(map[string]struct{})
+	for _, t := range board.AllowedTaskTags {
+		lm[t.Tag] = struct{}{}
+	}
+
+	for _, t := range tags {
+		if _, ok := lm[t]; !ok {
+			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("tag %q not allowed for this board", t))
+		}
+	}
+
+	return nil
+}
+
+func validateBoardStatus(board *tasksv1.Board, status string) error {
+	for _, allowed := range board.AllowedTaskStatus {
+		if allowed.Status == status {
+			return nil
+		}
+	}
+
+	return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("status %q not allowed for this board", status))
 }

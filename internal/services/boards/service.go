@@ -67,6 +67,12 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardCreated{
+			BoardCreated: model,
+		},
+	})
+
 	return connect.NewResponse(&tasksv1.CreateBoardResponse{
 		Board: model,
 	}), nil
@@ -108,6 +114,12 @@ func (svc *Service) DeleteBoard(ctx context.Context, req *connect.Request[tasksv
 	if err := svc.repo.DeleteBoard(ctx, req.Msg.Id); err != nil {
 		return nil, err
 	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardDeleted{
+			BoardDeleted: req.Msg.Id,
+		},
+	})
 
 	return connect.NewResponse(new(emptypb.Empty)), nil
 }
@@ -169,6 +181,90 @@ func (svc *Service) DeleteNotification(ctx context.Context, req *connect.Request
 	}), nil
 }
 
+func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[tasksv1.AddTaskStatusRequest]) (*connect.Response[tasksv1.AddTaskStatusResponse], error) {
+	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.AddTaskStatus(ctx, req.Msg.BoardId, req.Msg.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(&tasksv1.AddTaskStatusResponse{
+		Board: b,
+	}), nil
+}
+
+func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskStatusRequest]) (*connect.Response[tasksv1.DeleteTaskStatusResponse], error) {
+	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.DeleteTaskStatus(ctx, req.Msg.BoardId, req.Msg.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(&tasksv1.DeleteTaskStatusResponse{
+		Board: b,
+	}), nil
+}
+
+func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1.AddTaskTagRequest]) (*connect.Response[tasksv1.AddTaskTagResponse], error) {
+	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.AddTaskTag(ctx, req.Msg.BoardId, req.Msg.Tag)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(&tasksv1.AddTaskTagResponse{
+		Board: b,
+	}), nil
+}
+
+func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskTagRequest]) (*connect.Response[tasksv1.DeleteTaskTagResponse], error) {
+	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.DeleteTaskTag(ctx, req.Msg.BoardId, req.Msg.Tag)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(&tasksv1.DeleteTaskTagResponse{
+		Board: b,
+	}), nil
+}
+
 func (svc *Service) ensureBoardOwner(ctx context.Context, boardID string) error {
 	remoteUser := auth.From(ctx)
 
@@ -182,6 +278,9 @@ func (svc *Service) ensureBoardOwner(ctx context.Context, boardID string) error 
 
 	board, err := svc.repo.GetBoard(ctx, boardID)
 	if err != nil {
+		if errors.Is(err, repo.ErrBoardNotFound) {
+			return connect.NewError(connect.CodeNotFound, err)
+		}
 		return err
 	}
 
