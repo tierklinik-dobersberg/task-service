@@ -154,12 +154,10 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 		"description",
 		"assignee_id",
 		"location",
-		"add_tags",
-		"delete_tags",
+		"tags",
 		"status",
 		"due_time",
-		"add_properties",
-		"delete_properties",
+		"properties",
 	}
 
 	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
@@ -188,14 +186,22 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				unsetModel["address"] = ""
 				unsetModel["location"] = ""
 			}
-		case "add_tags":
-			pushModel["tags"] = bson.M{
-				"$each": update.AddTags,
+		case "tags":
+			switch v := update.Tags.(type) {
+			case *tasksv1.UpdateTaskRequest_AddTags:
+				pushModel["tags"] = bson.M{
+					"$each": v.AddTags.Values,
+				}
+
+			case *tasksv1.UpdateTaskRequest_DeleteTags:
+				pullModel["tags"] = bson.M{
+					"$in": v.DeleteTags.Values,
+				}
+
+			case *tasksv1.UpdateTaskRequest_ReplaceTags:
+				setModel["tags"] = v.ReplaceTags.Values
 			}
-		case "delete_tags":
-			pullModel["tags"] = bson.M{
-				"$in": update.DeleteTags,
-			}
+
 		case "status":
 			setModel["status"] = update.Status
 		case "due_time":
@@ -205,19 +211,22 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				unsetModel["dueTime"] = ""
 			}
 
-		case "add_properties":
-			for _, property := range update.AddProperties {
-				blob, err := proto.Marshal(property.Value)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal property value for %q: %w", property.Key, err)
+		case "properties":
+			switch v := update.Properties.(type) {
+			case *tasksv1.UpdateTaskRequest_AddProperties:
+				for _, property := range v.AddProperties.Properties {
+					blob, err := proto.Marshal(property.Value)
+					if err != nil {
+						return nil, fmt.Errorf("failed to marshal property value for %q: %w", property.Key, err)
+					}
+
+					setModel["properties."+property.Key] = blob
 				}
 
-				setModel["properties."+property.Key] = blob
-			}
-
-		case "delete_properties":
-			for _, prop := range update.DeleteProperties {
-				unsetModel["properties."+prop] = ""
+			case *tasksv1.UpdateTaskRequest_DeleteProperties:
+				for _, prop := range v.DeleteProperties.Values {
+					unsetModel["properties."+prop] = ""
+				}
 			}
 
 		default:

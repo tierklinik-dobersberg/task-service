@@ -176,8 +176,17 @@ func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1
 		id = r.ID
 	}
 
-	if err := validateBoardTags(board, req.Msg.AddTags); err != nil {
-		return nil, err
+	switch v := req.Msg.Tags.(type) {
+	case *tasksv1.UpdateTaskRequest_AddTags:
+		if err := validateBoardTags(board, v.AddTags.Values); err != nil {
+			return nil, err
+		}
+
+	case *tasksv1.UpdateTaskRequest_ReplaceTags:
+		if err := validateBoardTags(board, v.ReplaceTags.Values); err != nil {
+			return nil, err
+		}
+
 	}
 
 	if req.Msg.Status != "" {

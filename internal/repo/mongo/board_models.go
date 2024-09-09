@@ -78,6 +78,7 @@ func statusFromProto(pb *tasksv1.TaskStatus) *TaskStatus {
 	return &TaskStatus{
 		Status:      pb.Status,
 		Description: pb.Description,
+		Color:       pb.Color,
 	}
 }
 
