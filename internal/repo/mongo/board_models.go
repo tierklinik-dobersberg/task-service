@@ -47,6 +47,8 @@ type (
 		OwnerID          string              `bson:"ownerId"`
 		TaskStatuses     []TaskStatus        `bson:"statuses,omitempty"`
 		TaskTags         []TaskTag           `bson:"tags,omitempty"`
+		EligibleUserIds  []string            `bson:"eligibleUserIds,omitempty"`
+		EligibleRoleIds  []string            `bson:"eligibleRoleIds,omitempty"`
 	}
 )
 
@@ -174,6 +176,8 @@ func (b *Board) ToProto() *tasksv1.Board {
 		Notifications:     make([]*tasksv1.BoardNotification, len(b.Notifications)),
 		AllowedTaskStatus: make([]*tasksv1.TaskStatus, len(b.TaskStatuses)),
 		AllowedTaskTags:   make([]*tasksv1.TaskTag, len(b.TaskTags)),
+		EligibleRoleIds:   b.EligibleRoleIds,
+		EligibleUserIds:   b.EligibleUserIds,
 	}
 
 	for idx, n := range b.Notifications {
@@ -211,6 +215,8 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		TaskStatuses:     statusListFromProto(pb.AllowedTaskStatus),
 		TaskTags:         tagListFromProto(pb.AllowedTaskTags),
 		OwnerID:          pb.OwnerId,
+		EligibleUserIds:  pb.EligibleUserIds,
+		EligibleRoleIds:  pb.EligibleRoleIds,
 	}
 
 	return b, nil

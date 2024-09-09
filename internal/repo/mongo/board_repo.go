@@ -93,6 +93,8 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 		"allowed_task_tags",
 		"read_permission",
 		"write_permissison",
+		"eligible_role_ids",
+		"eligible_user_ids",
 	}
 
 	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
@@ -118,6 +120,12 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 
 		case "write_permission":
 			setModel["writePermissions"] = permissionsFromProto(update.WritePermission)
+
+		case "eligible_role_ids":
+			setModel["eligibleRoleIds"] = update.EligibleRoleIds
+
+		case "eligible_user_ids":
+			setModel["eligibleUserIds"] = update.EligibleUserIds
 
 		default:
 			return nil, fmt.Errorf("invalid path %q in update_mask", p)

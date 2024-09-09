@@ -8,11 +8,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/bufbuild/connect-go"
+	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
+	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/services"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -86,6 +90,11 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		model.AssigneeId = r.AssigneeId
 		model.AssignedBy = id
 		model.AssignTime = timestamppb.Now()
+
+		// verify the user is acutally assignable
+		if err := svc.canAssignUser(ctx, r.AssigneeId, board); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := svc.repo.CreateTask(ctx, model); err != nil {
@@ -187,6 +196,12 @@ func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1
 			return nil, err
 		}
 
+	}
+
+	if req.Msg.AssigneeId != "" {
+		if err := svc.canAssignUser(ctx, req.Msg.AssigneeId, board); err != nil {
+			return nil, err
+		}
 	}
 
 	if req.Msg.Status != "" {
@@ -358,4 +373,35 @@ func validateBoardStatus(board *tasksv1.Board, status string) error {
 	}
 
 	return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("status %q not allowed for this board", status))
+}
+
+func (svc *Service) canAssignUser(ctx context.Context, userId string, board *tasksv1.Board) error {
+	if len(board.EligibleRoleIds) == 0 && len(board.EligibleUserIds) == 0 {
+		return nil
+	}
+
+	if slices.Contains(board.EligibleUserIds, userId) {
+		return nil
+	}
+
+	// fetch user roles
+	cli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Common.Config.IdmURL)
+
+	profile, err := cli.GetUser(ctx, connect.NewRequest(&idmv1.GetUserRequest{
+		Search: &idmv1.GetUserRequest_Id{
+			Id: userId,
+		},
+	}))
+
+	if err != nil {
+		return fmt.Errorf("failed to fetch user profile: %w", err)
+	}
+
+	for _, role := range profile.Msg.Profile.Roles {
+		if slices.Contains(board.EligibleRoleIds, role.Id) {
+			return nil
+		}
+	}
+
+	return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("the selected user is not eligible for assignment"))
 }
