@@ -73,6 +73,93 @@ func (db *Repository) CreateBoard(ctx context.Context, board *tasksv1.Board) err
 	return nil
 }
 
+func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoardRequest) (*tasksv1.Board, error) {
+	oid, err := primitive.ObjectIDFromHex(update.BoardId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse board id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	setModel := bson.M{}
+	unsetModel := bson.M{}
+
+	paths := []string{
+		"display_name",
+		"description",
+		"allowed_task_status",
+		"allowed_task_tags",
+		"read_permission",
+		"write_permissison",
+	}
+
+	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
+		paths = p
+	}
+
+	for _, p := range paths {
+		switch p {
+		case "display_name":
+			setModel["displayName"] = update.DisplayName
+
+		case "description":
+			setModel["description"] = update.Description
+
+		case "allowed_task_status":
+			setModel["statuses"] = statusListFromProto(update.AllowedTaskStatus)
+
+		case "allowed_task_tags":
+			setModel["tags"] = tagListFromProto(update.AllowedTaskTags)
+
+		case "read_permission":
+			setModel["readPermissions"] = permissionsFromProto(update.ReadPermission)
+
+		case "write_permission":
+			setModel["writePermissions"] = permissionsFromProto(update.WritePermission)
+
+		default:
+			return nil, fmt.Errorf("invalid path %q in update_mask", p)
+		}
+	}
+
+	updateModel := bson.M{}
+
+	if len(setModel) > 0 {
+		updateModel["$set"] = setModel
+	}
+
+	if len(unsetModel) > 0 {
+		updateModel["$unset"] = unsetModel
+	}
+
+	if len(updateModel) == 0 {
+		return nil, fmt.Errorf("nothing to update")
+	}
+
+	res := db.boards.FindOneAndUpdate(
+		ctx,
+		filter,
+		updateModel,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	)
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrTaskNotFound
+		}
+
+		return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+	}
+
+	var b Board
+	if err := res.Decode(&b); err != nil {
+		return nil, fmt.Errorf("failed to decode board document: %w", err)
+	}
+
+	return b.ToProto(), nil
+}
+
 func (db *Repository) ListBoards(ctx context.Context) ([]*tasksv1.Board, error) {
 	res, err := db.boards.Find(ctx, bson.M{})
 

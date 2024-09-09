@@ -18,6 +18,9 @@ type BoardBackend interface {
 	// is updated to the newly generated ID.
 	CreateBoard(context.Context, *tasksv1.Board) error
 
+	// UpdateBoard updates board settings.
+	UpdateBoard(context.Context, *tasksv1.UpdateBoardRequest) (*tasksv1.Board, error)
+
 	// ListBoards returns all boards.
 	ListBoards(context.Context) ([]*tasksv1.Board, error)
 

@@ -78,6 +78,27 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 	}), nil
 }
 
+func (svc *Service) UpdateBoard(ctx context.Context, req *connect.Request[tasksv1.UpdateBoardRequest]) (*connect.Response[tasksv1.UpdateBoardResponse], error) {
+	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	res, err := svc.repo.UpdateBoard(ctx, req.Msg)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: res,
+		},
+	})
+
+	return connect.NewResponse(&tasksv1.UpdateBoardResponse{
+		Board: res,
+	}), nil
+}
+
 func (svc *Service) ListBoards(ctx context.Context, req *connect.Request[tasksv1.ListBoardsRequest]) (*connect.Response[tasksv1.ListBoardsResponse], error) {
 	list, err := svc.repo.ListBoards(ctx)
 	if err != nil {

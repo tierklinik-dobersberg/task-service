@@ -81,6 +81,22 @@ func statusFromProto(pb *tasksv1.TaskStatus) *TaskStatus {
 	}
 }
 
+func statusListFromProto(pb []*tasksv1.TaskStatus) []TaskStatus {
+	result := make([]TaskStatus, len(pb))
+	for idx, p := range pb {
+		result[idx] = *statusFromProto(p)
+	}
+	return result
+}
+
+func tagListFromProto(pb []*tasksv1.TaskTag) []TaskTag {
+	result := make([]TaskTag, len(pb))
+	for idx, p := range pb {
+		result[idx] = *tagFromProto(p)
+	}
+	return result
+}
+
 func (perm *BoardPermission) ToProto() *tasksv1.BoardPermission {
 	if perm == nil {
 		return nil
@@ -135,6 +151,16 @@ func notificationFromProto(pb *tasksv1.BoardNotification) *BoardNotification {
 	}
 }
 
+func notificationListFromProto(pb []*tasksv1.BoardNotification) []BoardNotification {
+	result := make([]BoardNotification, len(pb))
+
+	for idx, n := range pb {
+		result[idx] = *notificationFromProto(n)
+	}
+
+	return result
+}
+
 func (b *Board) ToProto() *tasksv1.Board {
 	pb := &tasksv1.Board{
 		Id:                b.ID.Hex(),
@@ -180,22 +206,10 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		Description:      pb.Description,
 		WritePermissions: permissionsFromProto(pb.WritePermission),
 		ReadPermissions:  permissionsFromProto(pb.ReadPermission),
-		Notifications:    make([]BoardNotification, len(pb.Notifications)),
-		TaskStatuses:     make([]TaskStatus, len(pb.AllowedTaskStatus)),
-		TaskTags:         make([]TaskTag, len(pb.AllowedTaskTags)),
+		Notifications:    notificationListFromProto(pb.Notifications),
+		TaskStatuses:     statusListFromProto(pb.AllowedTaskStatus),
+		TaskTags:         tagListFromProto(pb.AllowedTaskTags),
 		OwnerID:          pb.OwnerId,
-	}
-
-	for idx, n := range pb.Notifications {
-		b.Notifications[idx] = *notificationFromProto(n)
-	}
-
-	for idx, s := range pb.AllowedTaskStatus {
-		b.TaskStatuses[idx] = *statusFromProto(s)
-	}
-
-	for idx, t := range pb.AllowedTaskTags {
-		b.TaskTags[idx] = *tagFromProto(t)
 	}
 
 	return b, nil
