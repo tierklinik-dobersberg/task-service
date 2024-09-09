@@ -49,8 +49,8 @@ type (
 		UpdateTime   time.Time          `bson:"updateTime"`
 		AssignTime   time.Time          `bson:"assignTime,omitempty"`
 		CompleteTime time.Time          `bson:"completeTime,omitempty"`
-		Properties   map[string][]byte  `bson:"properties,omitempty"`
-		Attachments  []Attachment       `bson:"attachments,omitempty"`
+		Properties   map[string][]byte  `bson:"properties"`
+		Attachments  []Attachment       `bson:"attachments"`
 	}
 )
 
@@ -207,6 +207,10 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 		UpdateTime:  pb.UpdateTime.AsTime(),
 	}
 
+	if t.Tags == nil {
+		t.Tags = make([]string, 0)
+	}
+
 	if pb.CompleteTime.IsValid() {
 		t.CompleteTime = pb.CompleteTime.AsTime()
 	}
@@ -226,6 +230,7 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 		t.GeoLocation = geoLocationFromProto(v.GeoLocation)
 	}
 
+	t.Attachments = make([]Attachment, len(pb.Attachments))
 	for _, at := range pb.Attachments {
 		t.Attachments = append(t.Attachments, *attachmentFromProto(at))
 	}
