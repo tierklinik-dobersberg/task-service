@@ -46,7 +46,7 @@ func (db *Repository) setup(ctx context.Context) error {
 	if _, err := db.boards.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
-				{Key: "name", Value: 1},
+				{Key: "displayName", Value: 1},
 			},
 			Options: options.Index().SetUnique(true),
 		},
@@ -92,7 +92,7 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 		"allowed_task_status",
 		"allowed_task_tags",
 		"read_permission",
-		"write_permissison",
+		"write_permission",
 		"eligible_role_ids",
 		"eligible_user_ids",
 	}
