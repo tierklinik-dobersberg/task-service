@@ -149,19 +149,14 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 	pushModel := bson.M{}
 	pullModel := bson.M{}
 
-	paths := []string{
-		"title",
-		"description",
-		"assignee_id",
-		"location",
-		"tags",
-		"status",
-		"due_time",
-		"properties",
-	}
+	paths := []string{}
 
 	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
 		paths = p
+	}
+
+	if len(paths) == 0 {
+		return db.GetTask(ctx, update.TaskId)
 	}
 
 	for _, p := range paths {

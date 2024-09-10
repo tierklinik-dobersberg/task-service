@@ -86,19 +86,14 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 	setModel := bson.M{}
 	unsetModel := bson.M{}
 
-	paths := []string{
-		"display_name",
-		"description",
-		"allowed_task_status",
-		"allowed_task_tags",
-		"read_permission",
-		"write_permission",
-		"eligible_role_ids",
-		"eligible_user_ids",
-	}
+	paths := []string{}
 
 	if p := update.GetUpdateMask().GetPaths(); len(p) > 0 {
 		paths = p
+	}
+
+	if len(paths) == 0 {
+		return db.GetBoard(ctx, update.BoardId)
 	}
 
 	for _, p := range paths {
