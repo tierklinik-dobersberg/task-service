@@ -91,7 +91,7 @@ type TaskBackend interface {
 
 	DeleteTagsFromTasks(ctx context.Context, boardId, tag string) error
 
-	DeleteStatusFromTasks(ctx context.Context, boardId, status string) error
+	DeleteStatusFromTasks(ctx context.Context, boardId, status, replacement string) error
 
 	UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
 }

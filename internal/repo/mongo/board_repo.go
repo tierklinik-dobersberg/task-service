@@ -345,8 +345,13 @@ func (db *Repository) DeleteTaskStatus(ctx context.Context, boardID, status stri
 		return nil, fmt.Errorf("invalid board id: %w", err)
 	}
 
+	board, err := db.GetBoard(ctx, boardID)
+	if err != nil {
+		return nil, err
+	}
+
 	// first, unset the status from all tasks
-	if err := db.DeleteStatusFromTasks(ctx, boardID, status); err != nil {
+	if err := db.DeleteStatusFromTasks(ctx, boardID, status, board.InitialStatus); err != nil {
 		return nil, err
 	}
 

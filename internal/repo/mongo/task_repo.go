@@ -142,6 +142,15 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 		return nil, fmt.Errorf("failed to parse task id: %w", err)
 	}
 
+	task, err := db.GetTask(ctx, update.TaskId)
+	if err != nil {
+		return nil, err
+	}
+
+	board, err := db.GetBoard(ctx, task.BoardId)
+	if err != nil {
+		return nil, err
+	}
 
 	setModel := bson.M{
 		"updateTime": time.Now(),
@@ -203,6 +212,10 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 			}
 
 		case "status":
+			if update.Status == "" {
+				update.Status = board.InitialStatus
+			}
+
 			setModel["status"] = update.Status
 		case "due_time":
 			if update.DueTime.IsValid() {
@@ -584,15 +597,24 @@ func (db *Repository) DeleteTagsFromTasks(ctx context.Context, boardId string, t
 	return nil
 }
 
-func (db *Repository) DeleteStatusFromTasks(ctx context.Context, boardId string, status string) error {
+func (db *Repository) DeleteStatusFromTasks(ctx context.Context, boardId string, status string, replacement string) error {
+	update := bson.M{
+		"$unset": bson.M{
+			"status": "",
+		},
+	}
+
+	if replacement != "" {
+		update = bson.M{
+			"$set": bson.M{
+				"status": replacement,
+			},
+		}
+	}
 	_, err := db.tasks.UpdateMany(
 		ctx,
 		bson.M{"boardId": boardId, "status": status},
-		bson.M{
-			"$unset": bson.M{
-				"status": "",
-			},
-		},
+		update,
 	)
 
 	if err != nil {
