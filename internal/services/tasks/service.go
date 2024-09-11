@@ -58,6 +58,7 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		UpdateTime:  timestamppb.Now(),
 		Status:      r.Status,
 		Attachments: r.Attachments,
+		Priortiy:    r.Priority,
 	}
 
 	// validate tags and status
@@ -68,6 +69,10 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 	}
 
 	if err := validateBoardTags(board, r.Tags); err != nil {
+		return nil, err
+	}
+
+	if err := validateBoardPriority(board, r.Priority); err != nil {
 		return nil, err
 	}
 
@@ -141,7 +146,7 @@ func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasks
 
 	svc.PublishEvent(&tasksv1.TaskEvent{
 		Task:      t,
-		EventType: tasksv1.EventType_EVENT_TYPE_COMPLETED,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
 	})
 
 	return connect.NewResponse(&tasksv1.CompleteTaskResponse{
@@ -166,7 +171,7 @@ func (svc *Service) AssignTask(ctx context.Context, req *connect.Request[tasksv1
 
 	svc.PublishEvent(&tasksv1.TaskEvent{
 		Task:      task,
-		EventType: tasksv1.EventType_EVENT_TYPE_ASSIGNEE_CHANGED,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
 	})
 
 	return connect.NewResponse(&tasksv1.AssignTaskResponse{
@@ -365,6 +370,16 @@ func validateBoardTags(board *tasksv1.Board, tags []string) error {
 	return nil
 }
 
+func validateBoardPriority(board *tasksv1.Board, priority int32) error {
+	for _, allowed := range board.AllowedTaskPriorities {
+		if allowed.Priority == priority {
+			return nil
+		}
+	}
+
+	return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("priorty %v not allowed for this board", priority))
+}
+
 func validateBoardStatus(board *tasksv1.Board, status string) error {
 	for _, allowed := range board.AllowedTaskStatus {
 		if allowed.Status == status {
@@ -404,4 +419,34 @@ func (svc *Service) canAssignUser(ctx context.Context, userId string, board *tas
 	}
 
 	return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("the selected user is not eligible for assignment"))
+}
+
+func (svc *Service) ManageSubscription(ctx context.Context, req *connect.Request[tasksv1.ManageSubscriptionRequest]) (*connect.Response[emptypb.Empty], error) {
+	remoteUser := auth.From(ctx)
+	if remoteUser == nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("authentication required"))
+	}
+
+	isAdmin := slices.Contains(remoteUser.RoleIDs, "idm_superuser")
+
+	if !isAdmin && req.Msg.UserId != "" && req.Msg.UserId != remoteUser.ID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only administrators are allowed to configure subscriptions for other users"))
+	} else {
+		req.Msg.UserId = remoteUser.ID
+	}
+
+	if err := svc.repo.UpdateTaskSubscription(ctx, req.Msg.Id, &tasksv1.Subscription{
+		UserId:            req.Msg.UserId,
+		NotificationTypes: req.Msg.Types,
+		Unsubscribed:      req.Msg.Unsubscribe,
+	}); err != nil {
+		if errors.Is(err, repo.ErrTaskNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+
+		return nil, err
+	}
+
+	return connect.NewResponse(new(emptypb.Empty)), nil
+
 }

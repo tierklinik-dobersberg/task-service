@@ -5,10 +5,11 @@ go 1.22.5
 require (
 	github.com/bufbuild/connect-go v1.10.0
 	github.com/bufbuild/protovalidate-go v0.6.5
+	github.com/hashicorp/go-multierror v1.1.1
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
-	github.com/tierklinik-dobersberg/apis v0.3.1
+	github.com/tierklinik-dobersberg/apis v0.3.2-0.20240911065841-fd969ac2f63a
 	go.mongodb.org/mongo-driver v1.16.1
 	google.golang.org/protobuf v1.34.2
 )
@@ -21,6 +22,7 @@ require (
 	github.com/golang/gddo v0.0.0-20210115222349-20d68f94ee1f // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/cel-go v0.21.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/mitchellh/go-server-timing v1.0.1 // indirect

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
@@ -31,17 +32,21 @@ type BoardBackend interface {
 	// by id.
 	DeleteBoard(context.Context, string) error
 
-	// SaveNotification updates or creates a new board notification.
-	SaveNotification(context.Context, string, *tasksv1.BoardNotification) (*tasksv1.Board, error)
-
-	// DeleteNotification deletes a board notification identified by the board ID and
-	// the notification name.
-	DeleteNotification(context.Context, string, string) (*tasksv1.Board, error)
-
+	// AddTaskStatus adds a new task status value to a board
 	AddTaskStatus(context.Context, string, *tasksv1.TaskStatus) (*tasksv1.Board, error)
+
+	// DeleteTaskStatus deletes a task status value from a board
+	// and resets all tasks with that status to board.InitialStatus
 	DeleteTaskStatus(context.Context, string, string) (*tasksv1.Board, error)
+
+	// AddTaskTag adds a new task tag to the board.
 	AddTaskTag(context.Context, string, *tasksv1.TaskTag) (*tasksv1.Board, error)
+
+	// DeleteTaskTag deletes a task tag from the board and removes that
+	// tag from any task that has it assigned.
 	DeleteTaskTag(context.Context, string, string) (*tasksv1.Board, error)
+
+	UpdateBoardSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
 }
 
 type TaskBackend interface {
@@ -85,7 +90,10 @@ type TaskBackend interface {
 	DeleteTasksMatchingQuery(ctx context.Context, queries []*tasksv1.TaskQuery) error
 
 	DeleteTagsFromTasks(ctx context.Context, boardId, tag string) error
+
 	DeleteStatusFromTasks(ctx context.Context, boardId, status string) error
+
+	UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
 }
 
 type Backend interface {
@@ -105,4 +113,19 @@ func New(backend Backend) Repo {
 	return &repo{
 		Backend: backend,
 	}
+}
+
+func EnsureUniqueField[T any, E comparable, F func(T) E](list []T, fn F) error {
+	m := make(map[E]struct{}, len(list))
+
+	for _, v := range list {
+		key := fn(v)
+		if _, ok := m[key]; ok {
+			return fmt.Errorf("duplicate value: %v", key)
+		}
+
+		m[key] = struct{}{}
+	}
+
+	return nil
 }

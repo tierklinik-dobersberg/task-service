@@ -33,24 +33,26 @@ type (
 	}
 
 	Task struct {
-		ID           primitive.ObjectID `bson:"_id,omitempty"`
-		BoardID      string             `bson:"boardId"`
-		Title        string             `bson:"title"`
-		Description  string             `bson:"description"`
-		Creator      string             `bson:"creator"`
-		Assignee     string             `bson:"assignee,omitempty"`
-		GeoLocation  *GeoLocation       `bson:"location,omitempty"`
-		Address      *Address           `bson:"address,omitempty"`
-		Tags         []string           `bson:"tags"`
-		Status       string             `bson:"status"`
-		AssignedBy   string             `bson:"assignedBy,omitempty"`
-		DueTime      time.Time          `bson:"dueTime,omitempty"`
-		CreateTime   time.Time          `bson:"createTime"`
-		UpdateTime   time.Time          `bson:"updateTime"`
-		AssignTime   time.Time          `bson:"assignTime,omitempty"`
-		CompleteTime time.Time          `bson:"completeTime,omitempty"`
-		Properties   map[string][]byte  `bson:"properties"`
-		Attachments  []Attachment       `bson:"attachments"`
+		ID            primitive.ObjectID      `bson:"_id,omitempty"`
+		BoardID       string                  `bson:"boardId"`
+		Title         string                  `bson:"title"`
+		Description   string                  `bson:"description"`
+		Creator       string                  `bson:"creator"`
+		Assignee      string                  `bson:"assignee,omitempty"`
+		GeoLocation   *GeoLocation            `bson:"location,omitempty"`
+		Address       *Address                `bson:"address,omitempty"`
+		Tags          []string                `bson:"tags"`
+		Status        string                  `bson:"status"`
+		AssignedBy    string                  `bson:"assignedBy,omitempty"`
+		DueTime       time.Time               `bson:"dueTime,omitempty"`
+		CreateTime    time.Time               `bson:"createTime"`
+		UpdateTime    time.Time               `bson:"updateTime"`
+		AssignTime    time.Time               `bson:"assignTime,omitempty"`
+		CompleteTime  time.Time               `bson:"completeTime,omitempty"`
+		Properties    map[string][]byte       `bson:"properties"`
+		Subscriptions map[string]Subscription `bson:"subscriptions"`
+		Priority      int32                   `bson:"priority"`
+		Attachments   []Attachment            `bson:"attachments"`
 	}
 )
 
@@ -125,17 +127,19 @@ func addrFromProto(pb *customerv1.Address) *Address {
 
 func (task *Task) ToProto() *tasksv1.Task {
 	pb := &tasksv1.Task{
-		Id:          task.ID.Hex(),
-		BoardId:     task.BoardID,
-		Title:       task.Title,
-		Description: task.Description,
-		CreatorId:   task.Creator,
-		AssigneeId:  task.Assignee,
-		Tags:        task.Tags,
-		Status:      task.Status,
-		AssignedBy:  task.AssignedBy,
-		CreateTime:  timestamppb.New(task.CreateTime),
-		UpdateTime:  timestamppb.New(task.UpdateTime),
+		Id:            task.ID.Hex(),
+		BoardId:       task.BoardID,
+		Title:         task.Title,
+		Description:   task.Description,
+		CreatorId:     task.Creator,
+		AssigneeId:    task.Assignee,
+		Tags:          task.Tags,
+		Status:        task.Status,
+		AssignedBy:    task.AssignedBy,
+		CreateTime:    timestamppb.New(task.CreateTime),
+		Priortiy:      task.Priority,
+		Subscriptions: subscriptionMapToProto(task.Subscriptions),
+		UpdateTime:    timestamppb.New(task.UpdateTime),
 	}
 
 	if task.GeoLocation != nil {
@@ -194,17 +198,21 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 	}
 
 	t := &Task{
-		ID:          oid,
-		BoardID:     pb.BoardId,
-		Title:       pb.Title,
-		Description: pb.Description,
-		Creator:     pb.CreatorId,
-		Assignee:    pb.AssigneeId,
-		Tags:        pb.Tags,
-		Status:      pb.Status,
-		AssignedBy:  pb.AssignedBy,
-		CreateTime:  pb.CreateTime.AsTime(),
-		UpdateTime:  pb.UpdateTime.AsTime(),
+		ID:            oid,
+		BoardID:       pb.BoardId,
+		Title:         pb.Title,
+		Description:   pb.Description,
+		Creator:       pb.CreatorId,
+		Assignee:      pb.AssigneeId,
+		Tags:          pb.Tags,
+		Status:        pb.Status,
+		AssignedBy:    pb.AssignedBy,
+		CreateTime:    pb.CreateTime.AsTime(),
+		UpdateTime:    pb.UpdateTime.AsTime(),
+		Priority:      pb.Priortiy,
+		Subscriptions: subscriptionMapFromProto(pb.Subscriptions),
+		Properties:    make(map[string][]byte, len(pb.Properties)),
+		Attachments:   make([]Attachment, 0, len(pb.Attachments)),
 	}
 
 	if t.Tags == nil {
@@ -230,14 +238,11 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 		t.GeoLocation = geoLocationFromProto(v.GeoLocation)
 	}
 
-	t.Attachments = make([]Attachment, len(pb.Attachments))
 	for _, at := range pb.Attachments {
 		t.Attachments = append(t.Attachments, *attachmentFromProto(at))
 	}
 
 	if len(pb.Properties) > 0 {
-		t.Properties = make(map[string][]byte)
-
 		for key, value := range pb.Properties {
 			blob, err := proto.Marshal(value)
 			if err != nil {

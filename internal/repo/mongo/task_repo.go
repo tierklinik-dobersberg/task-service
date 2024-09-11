@@ -181,6 +181,10 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				unsetModel["address"] = ""
 				unsetModel["location"] = ""
 			}
+
+		case "priority":
+			setModel["priority"] = update.Priority
+
 		case "tags":
 			switch v := update.Tags.(type) {
 			case *tasksv1.UpdateTaskRequest_AddTags:
@@ -309,9 +313,19 @@ func (db *Repository) buildQueryFilter(queries []*tasksv1.TaskQuery) (bson.M, er
 			}
 		}
 
-		if q.DueBefore.IsValid() {
-			filter["dueTime"] = bson.M{
-				"$lte": q.DueBefore.AsTime(),
+		if q.DueBetween != nil {
+			dueFilter := bson.M{}
+
+			if f := q.DueBetween.From; f.IsValid() {
+				dueFilter["$gte"] = f.AsTime()
+			}
+
+			if t := q.DueBetween.To; t.IsValid() {
+				dueFilter["$lte"] = t.AsTime()
+			}
+
+			if len(dueFilter) > 0 {
+				filter["dueTime"] = dueFilter
 			}
 		}
 
@@ -517,6 +531,36 @@ func (db *Repository) DeleteTasksMatchingQuery(ctx context.Context, queries []*t
 	}
 
 	_, err = db.tasks.DeleteMany(ctx, filter)
+
+	return err
+}
+
+func (db *Repository) UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error {
+	oid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return fmt.Errorf("failed to parse task id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	res, err := db.boards.UpdateOne(
+		ctx,
+		filter,
+		bson.M{
+			"$set": bson.M{
+				"subscriptions" + subscription.UserId: subscriptionFromProto(subscription),
+			},
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return repo.ErrTaskNotFound
+	}
 
 	return err
 }

@@ -11,9 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 type Repository struct {
+	client *mongo.Client
 	boards *mongo.Collection
 	tasks  *mongo.Collection
 }
@@ -31,6 +33,7 @@ func New(ctx context.Context, uri, dbName string) (*Repository, error) {
 	db := cli.Database(dbName)
 
 	repo := &Repository{
+		client: cli,
 		boards: db.Collection("boards"),
 		tasks:  db.Collection("tasks"),
 	}
@@ -97,30 +100,44 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 	}
 
 	for _, p := range paths {
+		field := boardTagFromProtoFieldName(p)
+
 		switch p {
 		case "display_name":
-			setModel["displayName"] = update.DisplayName
+			setModel[field] = update.DisplayName
 
 		case "description":
-			setModel["description"] = update.Description
+			setModel[field] = update.Description
 
 		case "allowed_task_status":
-			setModel["statuses"] = statusListFromProto(update.AllowedTaskStatus)
+			setModel[field] = statusListFromProto(update.AllowedTaskStatus)
 
 		case "allowed_task_tags":
-			setModel["tags"] = tagListFromProto(update.AllowedTaskTags)
+			setModel[field] = tagListFromProto(update.AllowedTaskTags)
+
+		case "allowed_task_priorities":
+			setModel[field] = update.AllowedTaskPriorities
+
+		case "help_text":
+			setModel[field] = update.HelpText
+
+		case "owner_id":
+			setModel[field] = update.OwnerId
+
+		case "initial_status":
+			setModel[field] = update.InitialStatus
 
 		case "read_permission":
-			setModel["readPermissions"] = permissionsFromProto(update.ReadPermission)
+			setModel[field] = permissionsFromProto(update.ReadPermission)
 
 		case "write_permission":
-			setModel["writePermissions"] = permissionsFromProto(update.WritePermission)
+			setModel[field] = permissionsFromProto(update.WritePermission)
 
 		case "eligible_role_ids":
-			setModel["eligibleRoleIds"] = update.EligibleRoleIds
+			setModel[field] = update.EligibleRoleIds
 
 		case "eligible_user_ids":
-			setModel["eligibleUserIds"] = update.EligibleUserIds
+			setModel[field] = update.EligibleUserIds
 
 		default:
 			return nil, fmt.Errorf("invalid path %q in update_mask", p)
@@ -141,26 +158,49 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 		return nil, fmt.Errorf("nothing to update")
 	}
 
-	res := db.boards.FindOneAndUpdate(
-		ctx,
-		filter,
-		updateModel,
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	)
-	if err := res.Err(); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, repo.ErrTaskNotFound
+	wc := writeconcern.Majority()
+	txnOptions := options.Transaction().SetWriteConcern(wc)
+
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	defer session.EndSession(ctx)
+
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		res := db.boards.FindOneAndUpdate(
+			ctx,
+			filter,
+			updateModel,
+			options.FindOneAndUpdate().SetReturnDocument(options.After),
+		)
+		if err := res.Err(); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, repo.ErrTaskNotFound
+			}
+
+			return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
 		}
 
-		return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+		var b Board
+		if err := res.Decode(&b); err != nil {
+			return nil, fmt.Errorf("failed to decode board document: %w", err)
+		}
+
+		// validate the board
+		if err := b.Validate(); err != nil {
+			return nil, err
+		}
+
+		return b.ToProto(), nil
+	}, txnOptions)
+
+	if err != nil {
+		return nil, err
 	}
 
-	var b Board
-	if err := res.Decode(&b); err != nil {
-		return nil, fmt.Errorf("failed to decode board document: %w", err)
-	}
-
-	return b.ToProto(), nil
+	return result.(*tasksv1.Board), nil
 }
 
 func (db *Repository) ListBoards(ctx context.Context) ([]*tasksv1.Board, error) {
@@ -220,90 +260,6 @@ func (db *Repository) GetBoard(ctx context.Context, id string) (*tasksv1.Board, 
 	return b.ToProto(), nil
 }
 
-func (db *Repository) SaveNotification(ctx context.Context, boardID string, notification *tasksv1.BoardNotification) (*tasksv1.Board, error) {
-	model := notificationFromProto(notification)
-
-	oid, err := primitive.ObjectIDFromHex(boardID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid board id: %w", err)
-	}
-
-	filter := bson.M{
-		"_id": oid,
-	}
-
-	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
-		"$set": bson.M{
-			"notifications.$[filter]": model,
-		},
-	}, options.Update().SetArrayFilters(options.ArrayFilters{
-		Filters: []any{
-			bson.M{
-				"filter.name": model.Name,
-			},
-		},
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
-	}
-
-	if replaceResult.ModifiedCount > 0 {
-		return db.GetBoard(ctx, boardID)
-	}
-
-	update := bson.M{
-		"$push": bson.M{
-			"notifications": model,
-		},
-	}
-
-	res, err := db.boards.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform update operation: %w", err)
-	}
-
-	if res.MatchedCount == 0 {
-		return nil, repo.ErrBoardNotFound
-	}
-
-	return db.GetBoard(ctx, boardID)
-}
-
-func (db *Repository) DeleteNotification(ctx context.Context, boardID, notificationName string) (*tasksv1.Board, error) {
-	oid, err := primitive.ObjectIDFromHex(boardID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid board id: %w", err)
-	}
-
-	filter := bson.M{
-		"_id": oid,
-	}
-
-	update := bson.M{
-		"$pull": bson.M{
-			"notifications": bson.M{
-				"name": notificationName,
-			},
-		},
-	}
-
-	res := db.boards.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
-	if err := res.Err(); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, repo.ErrBoardNotFound
-		}
-
-		return nil, fmt.Errorf("failed to perform update operation: %w", err)
-	}
-
-	var b Board
-	if err := res.Decode(&b); err != nil {
-		return nil, fmt.Errorf("failed to decode board: %w", err)
-	}
-
-	return b.ToProto(), nil
-}
-
 func (db *Repository) AddTaskStatus(ctx context.Context, boardId string, status *tasksv1.TaskStatus) (*tasksv1.Board, error) {
 	oid, err := primitive.ObjectIDFromHex(boardId)
 	if err != nil {
@@ -316,41 +272,71 @@ func (db *Repository) AddTaskStatus(ctx context.Context, boardId string, status 
 		"_id": oid,
 	}
 
-	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
-		"$set": bson.M{
-			"statuses.$[filter]": model,
-		},
-	}, options.Update().SetArrayFilters(options.ArrayFilters{
-		Filters: []any{
-			bson.M{
-				"filter.status": model.Status,
+	wc := writeconcern.Majority()
+	txnOptions := options.Transaction().SetWriteConcern(wc)
+
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	defer session.EndSession(ctx)
+
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+			"$set": bson.M{
+				"statuses.$[filter]": model,
 			},
-		},
-	}))
+		}, options.Update().SetArrayFilters(options.ArrayFilters{
+			Filters: []any{
+				bson.M{
+					"filter.status": model.Status,
+				},
+			},
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+		}
+
+		if replaceResult.ModifiedCount == 0 {
+			update := bson.M{
+				"$push": bson.M{
+					"statuses": model,
+				},
+			}
+
+			res, err := db.boards.UpdateOne(ctx, filter, update)
+			if err != nil {
+				return nil, fmt.Errorf("failed to perform update operation: %w", err)
+			}
+
+			if res.MatchedCount == 0 {
+				return nil, repo.ErrBoardNotFound
+			}
+		}
+
+		b, err := db.GetBoard(ctx, boardId)
+		if err != nil {
+			return nil, err
+		}
+
+		model, err := boardFromProto(b)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := model.Validate(); err != nil {
+			return nil, err
+		}
+
+		return b, nil
+	}, txnOptions)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+		return nil, err
 	}
 
-	if replaceResult.ModifiedCount > 0 {
-		return db.GetBoard(ctx, boardId)
-	}
-
-	update := bson.M{
-		"$push": bson.M{
-			"statuses": model,
-		},
-	}
-
-	res, err := db.boards.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform update operation: %w", err)
-	}
-
-	if res.MatchedCount == 0 {
-		return nil, repo.ErrBoardNotFound
-	}
-
-	return db.GetBoard(ctx, boardId)
+	return result.(*tasksv1.Board), nil
 }
 
 func (db *Repository) DeleteTaskStatus(ctx context.Context, boardID, status string) (*tasksv1.Board, error) {
@@ -405,41 +391,71 @@ func (db *Repository) AddTaskTag(ctx context.Context, boardId string, tag *tasks
 		"_id": oid,
 	}
 
-	replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
-		"$set": bson.M{
-			"tags.$[filter]": model,
-		},
-	}, options.Update().SetArrayFilters(options.ArrayFilters{
-		Filters: []any{
-			bson.M{
-				"filter.tag": model.Tag,
+	wc := writeconcern.Majority()
+	txnOptions := options.Transaction().SetWriteConcern(wc)
+
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	defer session.EndSession(ctx)
+
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+			"$set": bson.M{
+				"tags.$[filter]": model,
 			},
-		},
-	}))
+		}, options.Update().SetArrayFilters(options.ArrayFilters{
+			Filters: []any{
+				bson.M{
+					"filter.tag": model.Tag,
+				},
+			},
+		}))
+		if err != nil {
+			return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+		}
+
+		if replaceResult.ModifiedCount == 0 {
+			update := bson.M{
+				"$push": bson.M{
+					"tags": model,
+				},
+			}
+
+			res, err := db.boards.UpdateOne(ctx, filter, update)
+			if err != nil {
+				return nil, fmt.Errorf("failed to perform update operation: %w", err)
+			}
+
+			if res.MatchedCount == 0 {
+				return nil, repo.ErrBoardNotFound
+			}
+		}
+
+		b, err := db.GetBoard(ctx, boardId)
+		if err != nil {
+			return nil, err
+		}
+
+		model, err := boardFromProto(b)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := model.Validate(); err != nil {
+			return nil, err
+		}
+
+		return b, nil
+	}, txnOptions)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to perform replace operation: %w", err)
+		return nil, err
 	}
 
-	if replaceResult.ModifiedCount > 0 {
-		return db.GetBoard(ctx, boardId)
-	}
-
-	update := bson.M{
-		"$push": bson.M{
-			"tags": model,
-		},
-	}
-
-	res, err := db.boards.UpdateOne(ctx, filter, update)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform update operation: %w", err)
-	}
-
-	if res.MatchedCount == 0 {
-		return nil, repo.ErrBoardNotFound
-	}
-
-	return db.GetBoard(ctx, boardId)
+	return result.(*tasksv1.Board), nil
 }
 
 func (db *Repository) DeleteTaskTag(ctx context.Context, boardID, tag string) (*tasksv1.Board, error) {
@@ -480,6 +496,36 @@ func (db *Repository) DeleteTaskTag(ctx context.Context, boardID, tag string) (*
 	}
 
 	return b.ToProto(), nil
+}
+
+func (db *Repository) UpdateBoardSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error {
+	oid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return fmt.Errorf("failed to parse board id: %w", err)
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	res, err := db.boards.UpdateOne(
+		ctx,
+		filter,
+		bson.M{
+			"$set": bson.M{
+				"subscriptions" + subscription.UserId: subscriptionFromProto(subscription),
+			},
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return repo.ErrBoardNotFound
+	}
+
+	return err
 }
 
 // Compile-time check
