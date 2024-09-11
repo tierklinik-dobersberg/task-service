@@ -66,6 +66,8 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		if err := validateBoardStatus(board, r.Status); err != nil {
 			return nil, err
 		}
+	} else {
+		r.Status = board.InitialStatus
 	}
 
 	if err := validateBoardTags(board, r.Tags); err != nil {
@@ -213,6 +215,10 @@ func (svc *Service) UpdateTask(ctx context.Context, req *connect.Request[tasksv1
 		if err := validateBoardStatus(board, req.Msg.Status); err != nil {
 			return nil, err
 		}
+	} else {
+		// just set it to the initial status as it won't be updated anyway
+		// if "status" is not part of update_mask.paths
+		req.Msg.Status = board.InitialStatus
 	}
 
 	t, err := svc.repo.UpdateTask(ctx, id, req.Msg)

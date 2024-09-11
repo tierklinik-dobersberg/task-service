@@ -142,6 +142,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 		return nil, fmt.Errorf("failed to parse task id: %w", err)
 	}
 
+
 	setModel := bson.M{
 		"updateTime": time.Now(),
 	}
