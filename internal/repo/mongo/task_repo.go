@@ -312,7 +312,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 					}
 					changes = append(changes, &ValueChange{
 						FieldName: "tags",
-						NewValue: v.DeleteTags.Values,
+						NewValue:  v.AddTags.Values,
 					})
 
 				case *tasksv1.UpdateTaskRequest_DeleteTags:
@@ -321,7 +321,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 					}
 					changes = append(changes, &ValueChange{
 						FieldName: "tags",
-						OldValue: v.DeleteTags.Values
+						OldValue:  v.DeleteTags.Values,
 					})
 
 				case *tasksv1.UpdateTaskRequest_ReplaceTags:
@@ -329,11 +329,10 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 
 					changes = append(changes, &ValueChange{
 						FieldName: "tags",
-						NewValue: v.ReplaceTags.Values,
-						OldValue: task.Tags,
+						NewValue:  v.ReplaceTags.Values,
+						OldValue:  task.Tags,
 					})
 				}
-
 
 			case "status":
 				if update.Status == "" {
