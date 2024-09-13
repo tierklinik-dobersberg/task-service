@@ -94,6 +94,8 @@ type TaskBackend interface {
 	DeleteStatusFromTasks(ctx context.Context, boardId, status, replacement string) error
 
 	UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
+
+	GetTaskTimeline(ctx context.Context, ids []string) ([]*tasksv1.TaskTimelineEntry, error)
 }
 
 type Backend interface {

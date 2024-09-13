@@ -15,9 +15,10 @@ import (
 )
 
 type Repository struct {
-	client *mongo.Client
-	boards *mongo.Collection
-	tasks  *mongo.Collection
+	client   *mongo.Client
+	boards   *mongo.Collection
+	tasks    *mongo.Collection
+	timeline *mongo.Collection
 }
 
 func New(ctx context.Context, uri, dbName string) (*Repository, error) {
@@ -33,9 +34,10 @@ func New(ctx context.Context, uri, dbName string) (*Repository, error) {
 	db := cli.Database(dbName)
 
 	repo := &Repository{
-		client: cli,
-		boards: db.Collection("boards"),
-		tasks:  db.Collection("tasks"),
+		client:   cli,
+		boards:   db.Collection("boards"),
+		tasks:    db.Collection("tasks"),
+		timeline: db.Collection("timeline"),
 	}
 
 	if err := repo.setup(ctx); err != nil {
@@ -55,6 +57,48 @@ func (db *Repository) setup(ctx context.Context) error {
 		},
 	}); err != nil {
 		return fmt.Errorf("failed to create board indexes: %w", err)
+	}
+
+	if _, err := db.tasks.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "boardId", Value: 1},
+			},
+		},
+		{
+			Keys: bson.D{
+				{Key: "creator", Value: 1},
+			},
+		},
+		{
+			Keys: bson.D{
+				{Key: "assignee", Value: 1},
+			},
+		},
+		{
+			Keys: bson.D{
+				{Key: "completeTime", Value: 1},
+			},
+			Options: options.Index().SetSparse(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "dueTime", Value: 1},
+			},
+			Options: options.Index().SetSparse(true),
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to create timeline indexes")
+	}
+
+	if _, err := db.timeline.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "taskId", Value: 1},
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to create timeline indexes")
 	}
 
 	return nil

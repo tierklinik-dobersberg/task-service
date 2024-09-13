@@ -11,6 +11,7 @@ import (
 
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
+	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -50,6 +51,12 @@ func (db *Repository) DeleteTask(ctx context.Context, id string) error {
 		return repo.ErrTaskNotFound
 	}
 
+	if _, err := db.timeline.DeleteMany(ctx, bson.M{
+		"taskId": oid,
+	}); err != nil {
+		slog.Error("failed to remove time-line entries", "taskId", id, "error", err)
+	}
+
 	return nil
 }
 
@@ -67,21 +74,45 @@ func (db *Repository) AssignTask(ctx context.Context, taskID, assigneeID, assign
 		},
 	}
 
-	res := db.tasks.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
-	if err := res.Err(); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, repo.ErrTaskNotFound
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.EndSession(ctx)
+
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		old, err := db.GetTask(ctx, taskID)
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+		db.recordChange(ctx, taskID, &ValueChange{
+			FieldName: "assignee_id",
+			OldValue:  old.AssigneeId,
+			NewValue:  assigneeID,
+		})
+
+		res := db.tasks.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+		if err := res.Err(); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, repo.ErrTaskNotFound
+			}
+
+			return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+		}
+
+		var t Task
+		if err := res.Decode(&t); err != nil {
+			return nil, fmt.Errorf("failed to decode task document: %w", err)
+		}
+
+		return t.ToProto(), nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	var t Task
-	if err := res.Decode(&t); err != nil {
-		return nil, fmt.Errorf("failed to decode task document: %w", err)
-	}
-
-	return t.ToProto(), nil
+	return result.(*tasksv1.Task), nil
 }
 
 func (db *Repository) CompleteTask(ctx context.Context, taskID string) (*tasksv1.Task, error) {
@@ -90,27 +121,48 @@ func (db *Repository) CompleteTask(ctx context.Context, taskID string) (*tasksv1
 		return nil, fmt.Errorf("failed to parse task id: %w", err)
 	}
 
+	now := time.Now()
+
 	update := bson.M{
 		"$set": bson.M{
-			"completeTime": time.Now(),
+			"completeTime": now,
 		},
 	}
 
-	res := db.tasks.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
-	if err := res.Err(); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, repo.ErrTaskNotFound
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.EndSession(ctx)
+
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		db.recordChange(ctx, taskID, &ValueChange{
+			FieldName: "complete_time",
+			NewValue:  now.Format(time.RFC3339),
+		})
+
+		res := db.tasks.FindOneAndUpdate(ctx, bson.M{"_id": oid}, update, options.FindOneAndUpdate().SetReturnDocument(options.After))
+		if err := res.Err(); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, repo.ErrTaskNotFound
+			}
+
+			return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
 		}
 
-		return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+		var t Task
+		if err := res.Decode(&t); err != nil {
+			return nil, fmt.Errorf("failed to decode task document: %w", err)
+		}
+
+		return t.ToProto(), nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	var t Task
-	if err := res.Decode(&t); err != nil {
-		return nil, fmt.Errorf("failed to decode task document: %w", err)
-	}
-
-	return t.ToProto(), nil
+	return result.(*tasksv1.Task), nil
 }
 
 func (db *Repository) GetTask(ctx context.Context, taskID string) (*tasksv1.Task, error) {
@@ -166,145 +218,216 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 	}
 
 	if len(paths) == 0 {
-		return db.GetTask(ctx, update.TaskId)
+		return task, nil
 	}
 
-	for _, p := range paths {
-		switch p {
-		case "title":
-			setModel["title"] = update.Title
-		case "description":
-			setModel["description"] = update.Description
-		case "assignee_id":
-			setModel["assignee"] = update.AssigneeId
-			setModel["assignTime"] = time.Now()
-			setModel["assignedBy"] = authenticatedUserId
+	session, err := db.client.StartSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.EndSession(ctx)
 
-			// if the user does not have a subscription placed, subscribe the new assignee
-			// automatically
-			if _, ok := task.Subscriptions[authenticatedUserId]; !ok {
-				setModel["subscriptions."+authenticatedUserId] = Subscription{
-					UserId:       authenticatedUserId,
-					Types:        make([]tasksv1.NotificationType, 0),
-					Unsubscribed: false,
-				}
-			}
+	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
+		changes := make([]*ValueChange, 0, len(paths))
 
-		case "location":
-			switch v := update.Location.(type) {
-			case *tasksv1.UpdateTaskRequest_Address:
-				setModel["address"] = addrFromProto(v.Address)
-				unsetModel["location"] = ""
-			case *tasksv1.UpdateTaskRequest_GeoLocation:
-				setModel["location"] = geoLocationFromProto(v.GeoLocation)
-				unsetModel["address"] = ""
-			default:
-				unsetModel["address"] = ""
-				unsetModel["location"] = ""
-			}
+		for _, p := range paths {
+			switch p {
+			case "title":
+				setModel["title"] = update.Title
+				changes = append(changes, &ValueChange{
+					FieldName: "title",
+					OldValue:  task.Title,
+				})
 
-		case "priority":
-			if update.Priority != nil {
-				setModel["priority"] = update.Priority.Value
-			} else {
-				unsetModel["priority"] = ""
-			}
+			case "description":
+				setModel["description"] = update.Description
+				changes = append(changes, &ValueChange{
+					FieldName: "description",
+					OldValue:  task.Description,
+				})
+			case "assignee_id":
+				setModel["assignee"] = update.AssigneeId
+				setModel["assignTime"] = time.Now()
+				setModel["assignedBy"] = authenticatedUserId
 
-		case "tags":
-			switch v := update.Tags.(type) {
-			case *tasksv1.UpdateTaskRequest_AddTags:
-				pushModel["tags"] = bson.M{
-					"$each": v.AddTags.Values,
+				changes = append(changes, &ValueChange{
+					FieldName: "assignee_id",
+					OldValue:  task.AssigneeId,
+				})
+
+				// if the user does not have a subscription placed, subscribe the new assignee
+				// automatically
+				if _, ok := task.Subscriptions[authenticatedUserId]; !ok {
+					setModel["subscriptions."+authenticatedUserId] = Subscription{
+						UserId:       authenticatedUserId,
+						Types:        make([]tasksv1.NotificationType, 0),
+						Unsubscribed: false,
+					}
 				}
 
-			case *tasksv1.UpdateTaskRequest_DeleteTags:
-				pullModel["tags"] = bson.M{
-					"$in": v.DeleteTags.Values,
+			case "location":
+				switch v := update.Location.(type) {
+				case *tasksv1.UpdateTaskRequest_Address:
+					setModel["address"] = addrFromProto(v.Address)
+					unsetModel["location"] = ""
+				case *tasksv1.UpdateTaskRequest_GeoLocation:
+					setModel["location"] = geoLocationFromProto(v.GeoLocation)
+					unsetModel["address"] = ""
+				default:
+					unsetModel["address"] = ""
+					unsetModel["location"] = ""
 				}
 
-			case *tasksv1.UpdateTaskRequest_ReplaceTags:
-				setModel["tags"] = v.ReplaceTags.Values
-			}
+				changes = append(changes, &ValueChange{
+					FieldName: "location",
+				})
 
-		case "status":
-			if update.Status == "" {
-				update.Status = board.InitialStatus
-			}
+			case "priority":
+				if update.Priority != nil {
+					setModel["priority"] = update.Priority.Value
+				} else {
+					unsetModel["priority"] = ""
+				}
 
-			setModel["status"] = update.Status
+				var old any
+				if task.Priority != nil {
+					old = task.Priority.Value
+				}
 
-		case "due_time":
-			if update.DueTime.IsValid() {
-				setModel["dueTime"] = update.DueTime.AsTime()
-			} else {
-				unsetModel["dueTime"] = ""
-			}
+				changes = append(changes, &ValueChange{
+					FieldName: "location",
+					OldValue:  old,
+				})
 
-		case "properties":
-			switch v := update.Properties.(type) {
-			case *tasksv1.UpdateTaskRequest_AddProperties:
-				for _, property := range v.AddProperties.Properties {
-					blob, err := proto.Marshal(property.Value)
-					if err != nil {
-						return nil, fmt.Errorf("failed to marshal property value for %q: %w", property.Key, err)
+			case "tags":
+				switch v := update.Tags.(type) {
+				case *tasksv1.UpdateTaskRequest_AddTags:
+					pushModel["tags"] = bson.M{
+						"$each": v.AddTags.Values,
 					}
 
-					setModel["properties."+property.Key] = blob
+				case *tasksv1.UpdateTaskRequest_DeleteTags:
+					pullModel["tags"] = bson.M{
+						"$in": v.DeleteTags.Values,
+					}
+
+				case *tasksv1.UpdateTaskRequest_ReplaceTags:
+					setModel["tags"] = v.ReplaceTags.Values
 				}
 
-			case *tasksv1.UpdateTaskRequest_DeleteProperties:
-				for _, prop := range v.DeleteProperties.Values {
-					unsetModel["properties."+prop] = ""
+				changes = append(changes, &ValueChange{
+					FieldName: "tags",
+					OldValue:  task.Tags,
+				})
+
+			case "status":
+				if update.Status == "" {
+					update.Status = board.InitialStatus
 				}
+
+				setModel["status"] = update.Status
+
+				changes = append(changes, &ValueChange{
+					FieldName: "status",
+					OldValue:  task.Status,
+				})
+
+			case "due_time":
+				if update.DueTime.IsValid() {
+					setModel["dueTime"] = update.DueTime.AsTime()
+				} else {
+					unsetModel["dueTime"] = ""
+				}
+
+				var old any
+				if task.DueTime != nil && task.DueTime.IsValid() {
+					old = task.DueTime.AsTime().Format(time.RFC3339)
+				}
+
+				changes = append(changes, &ValueChange{
+					FieldName: "status",
+					OldValue:  old,
+				})
+
+			case "properties":
+				switch v := update.Properties.(type) {
+				case *tasksv1.UpdateTaskRequest_AddProperties:
+					for _, property := range v.AddProperties.Properties {
+						blob, err := proto.Marshal(property.Value)
+						if err != nil {
+							return nil, fmt.Errorf("failed to marshal property value for %q: %w", property.Key, err)
+						}
+
+						setModel["properties."+property.Key] = blob
+					}
+
+				case *tasksv1.UpdateTaskRequest_DeleteProperties:
+					for _, prop := range v.DeleteProperties.Values {
+						unsetModel["properties."+prop] = ""
+					}
+				}
+
+			default:
+				return nil, fmt.Errorf("invalid path %q in update_mask", p)
+			}
+		}
+
+		updateModel := bson.M{}
+
+		if len(setModel) > 1 {
+			updateModel["$set"] = setModel
+		}
+
+		if len(unsetModel) > 0 {
+			updateModel["$unset"] = unsetModel
+		}
+
+		if len(pullModel) > 0 {
+			updateModel["$pull"] = pullModel
+		}
+
+		if len(pushModel) > 0 {
+			updateModel["$addToSet"] = pushModel
+		}
+
+		if len(updateModel) == 0 {
+			return nil, fmt.Errorf("nothing to update")
+		}
+
+		res := db.tasks.FindOneAndUpdate(
+			ctx,
+			bson.M{"_id": oid},
+			updateModel,
+			options.FindOneAndUpdate().SetReturnDocument(options.After),
+		)
+		if err := res.Err(); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, repo.ErrTaskNotFound
 			}
 
-		default:
-			return nil, fmt.Errorf("invalid path %q in update_mask", p)
-		}
-	}
-
-	updateModel := bson.M{}
-
-	if len(setModel) > 1 {
-		updateModel["$set"] = setModel
-	}
-
-	if len(unsetModel) > 0 {
-		updateModel["$unset"] = unsetModel
-	}
-
-	if len(pullModel) > 0 {
-		updateModel["$pull"] = pullModel
-	}
-
-	if len(pushModel) > 0 {
-		updateModel["$addToSet"] = pushModel
-	}
-
-	if len(updateModel) == 0 {
-		return nil, fmt.Errorf("nothing to update")
-	}
-
-	res := db.tasks.FindOneAndUpdate(
-		ctx,
-		bson.M{"_id": oid},
-		updateModel,
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	)
-	if err := res.Err(); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, repo.ErrTaskNotFound
+			return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
 		}
 
-		return nil, fmt.Errorf("failed to perform findAndModify: %w", err)
+		var t Task
+		if err := res.Decode(&t); err != nil {
+			return nil, fmt.Errorf("failed to decode task document: %w", err)
+		}
+
+		// finnaly, create change records for each change
+		for _, change := range changes {
+			change.NewValue = change.ValueFrom(&t)
+
+			db.recordChange(ctx, update.TaskId, change)
+		}
+
+		return t.ToProto(), nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	var t Task
-	if err := res.Decode(&t); err != nil {
-		return nil, fmt.Errorf("failed to decode task document: %w", err)
-	}
-
-	return t.ToProto(), nil
+	return result.(*tasksv1.Task), nil
 }
 
 func (db *Repository) buildQueryFilter(queries []*tasksv1.TaskQuery) (bson.M, error) {
@@ -665,6 +788,84 @@ func (db *Repository) DeleteStatusFromTasks(ctx context.Context, boardId string,
 	}
 
 	return nil
+}
+
+func (db *Repository) GetTaskTimeline(ctx context.Context, ids []string) ([]*tasksv1.TaskTimelineEntry, error) {
+	oids := make([]primitive.ObjectID, len(ids))
+
+	for idx, i := range ids {
+		oid, err := primitive.ObjectIDFromHex(i)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse task id: %w", err)
+		}
+
+		oids[idx] = oid
+	}
+
+	filter := bson.M{}
+
+	if len(oids) > 0 {
+		filter["_id"] = bson.M{
+			"$in": oids,
+		}
+	}
+
+	result, err := db.timeline.Find(ctx, filter, options.Find().SetSort(bson.D{
+		{Key: "createTime", Value: 1},
+	}))
+
+	if err != nil {
+		return nil, err
+	}
+
+	var entries []Timeline
+	if err := result.All(ctx, &entries); err != nil {
+		return nil, err
+	}
+
+	pb := make([]*tasksv1.TaskTimelineEntry, 0, len(entries))
+
+	for _, e := range entries {
+		pe, err := e.ToProto()
+		if err != nil {
+			slog.Error("failed to convert time-line entry to protobuf", "error", err, "id", e.ID.Hex())
+			continue
+		}
+
+		pb = append(pb, pe)
+	}
+
+	return pb, nil
+}
+
+func (db *Repository) recordChange(ctx context.Context, taskId string, change timelineValue) {
+	oid, err := primitive.ObjectIDFromHex(taskId)
+	if err != nil {
+		slog.Error("failed to parse task id", "id", taskId, "error", err)
+		return
+	}
+
+	var id string
+	if user := auth.From(ctx); user != nil {
+		id = user.ID
+	}
+
+	r := &Timeline{
+		TaskID:     oid,
+		CreateTime: time.Now(),
+		UserID:     id,
+	}
+
+	switch v := change.(type) {
+	case *TaskComment:
+		r.Comment = v
+	case *ValueChange:
+		r.ValueChange = v
+	}
+
+	if _, err := db.timeline.InsertOne(ctx, r); err != nil {
+		slog.Error("failed to insert timeline record", "id", taskId, "error", err)
+	}
 }
 
 var _ repo.TaskBackend = (*Repository)(nil)

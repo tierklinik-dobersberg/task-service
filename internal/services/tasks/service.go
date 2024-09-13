@@ -170,6 +170,23 @@ func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasks
 	}), nil
 }
 
+func (svc *Service) GetTimeline(ctx context.Context, req *connect.Request[tasksv1.GetTimelineRequest]) (*connect.Response[tasksv1.GetTimelineResponse], error) {
+	for _, id := range req.Msg.TaskIds {
+		if _, _, err := svc.ensureTaskPermissions(ctx, id, "read"); err != nil {
+			return nil, err
+		}
+	}
+
+	result, err := svc.repo.GetTaskTimeline(ctx, req.Msg.TaskIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&tasksv1.GetTimelineResponse{
+		Timeline: result,
+	}), nil
+}
+
 func (svc *Service) AssignTask(ctx context.Context, req *connect.Request[tasksv1.AssignTaskRequest]) (*connect.Response[tasksv1.AssignTaskResponse], error) {
 	if _, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
 		return nil, err
