@@ -320,6 +320,17 @@ func (svc *Service) ManageSubscription(ctx context.Context, req *connect.Request
 		return nil, err
 	}
 
+	b, err := svc.repo.GetBoard(ctx, req.Msg.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
 	return connect.NewResponse(new(emptypb.Empty)), nil
 
 }

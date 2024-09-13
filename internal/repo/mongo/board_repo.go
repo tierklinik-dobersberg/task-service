@@ -520,7 +520,7 @@ func (db *Repository) UpdateBoardSubscription(ctx context.Context, boardId strin
 		filter,
 		bson.M{
 			"$set": bson.M{
-				"subscriptions" + subscription.UserId: subscriptionFromProto(subscription),
+				"subscriptions." + subscription.UserId: subscriptionFromProto(subscription),
 			},
 		},
 	)

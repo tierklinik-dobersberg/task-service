@@ -565,7 +565,7 @@ func (db *Repository) UpdateTaskSubscription(ctx context.Context, taskId string,
 		filter,
 		bson.M{
 			"$set": bson.M{
-				"subscriptions" + subscription.UserId: subscriptionFromProto(subscription),
+				"subscriptions." + subscription.UserId: subscriptionFromProto(subscription),
 			},
 		},
 	)

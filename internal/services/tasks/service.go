@@ -453,6 +453,16 @@ func (svc *Service) ManageSubscription(ctx context.Context, req *connect.Request
 		return nil, err
 	}
 
+	t, err := svc.repo.GetTask(ctx, req.Msg.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		Task:      t,
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+	})
+
 	return connect.NewResponse(new(emptypb.Empty)), nil
 
 }
