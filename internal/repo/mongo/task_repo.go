@@ -300,7 +300,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				}
 
 				changes = append(changes, &ValueChange{
-					FieldName: "location",
+					FieldName: "priority",
 					OldValue:  old,
 				})
 
@@ -310,20 +310,30 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 					pushModel["tags"] = bson.M{
 						"$each": v.AddTags.Values,
 					}
+					changes = append(changes, &ValueChange{
+						FieldName: "tags",
+						NewValue: v.DeleteTags.Values,
+					})
 
 				case *tasksv1.UpdateTaskRequest_DeleteTags:
 					pullModel["tags"] = bson.M{
 						"$in": v.DeleteTags.Values,
 					}
+					changes = append(changes, &ValueChange{
+						FieldName: "tags",
+						OldValue: v.DeleteTags.Values
+					})
 
 				case *tasksv1.UpdateTaskRequest_ReplaceTags:
 					setModel["tags"] = v.ReplaceTags.Values
+
+					changes = append(changes, &ValueChange{
+						FieldName: "tags",
+						NewValue: v.ReplaceTags.Values,
+						OldValue: task.Tags,
+					})
 				}
 
-				changes = append(changes, &ValueChange{
-					FieldName: "tags",
-					OldValue:  task.Tags,
-				})
 
 			case "status":
 				if update.Status == "" {
@@ -350,7 +360,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 				}
 
 				changes = append(changes, &ValueChange{
-					FieldName: "status",
+					FieldName: "due_time",
 					OldValue:  old,
 				})
 
@@ -420,7 +430,9 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 
 		// finnaly, create change records for each change
 		for _, change := range changes {
-			change.NewValue = change.ValueFrom(&t)
+			if change.NewValue == nil && change.FieldName != "tags" {
+				change.NewValue = change.ValueFrom(&t)
+			}
 
 			db.recordChange(ctx, update.TaskId, t.BoardID, change)
 		}
