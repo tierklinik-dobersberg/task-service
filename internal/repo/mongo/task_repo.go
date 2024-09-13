@@ -179,6 +179,17 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 			setModel["assignee"] = update.AssigneeId
 			setModel["assignTime"] = time.Now()
 			setModel["assignedBy"] = authenticatedUserId
+
+			// if the user does not have a subscription placed, subscribe the new assignee
+			// automatically
+			if _, ok := task.Subscriptions[authenticatedUserId]; !ok {
+				setModel["subscriptions."+authenticatedUserId] = Subscription{
+					UserId:       authenticatedUserId,
+					Types:        make([]tasksv1.NotificationType, 0),
+					Unsubscribed: false,
+				}
+			}
+
 		case "location":
 			switch v := update.Location.(type) {
 			case *tasksv1.UpdateTaskRequest_Address:
@@ -193,7 +204,11 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 			}
 
 		case "priority":
-			setModel["priority"] = update.Priority
+			if update.Priority != nil {
+				setModel["priority"] = update.Priority.Value
+			} else {
+				unsetModel["priority"] = ""
+			}
 
 		case "tags":
 			switch v := update.Tags.(type) {

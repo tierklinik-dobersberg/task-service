@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type (
@@ -51,7 +52,7 @@ type (
 		CompleteTime  time.Time               `bson:"completeTime,omitempty"`
 		Properties    map[string][]byte       `bson:"properties"`
 		Subscriptions map[string]Subscription `bson:"subscriptions"`
-		Priority      int32                   `bson:"priority"`
+		Priority      *int32                  `bson:"priority"`
 		Attachments   []Attachment            `bson:"attachments"`
 	}
 )
@@ -137,9 +138,12 @@ func (task *Task) ToProto() *tasksv1.Task {
 		Status:        task.Status,
 		AssignedBy:    task.AssignedBy,
 		CreateTime:    timestamppb.New(task.CreateTime),
-		Priortiy:      task.Priority,
 		Subscriptions: subscriptionMapToProto(task.Subscriptions),
 		UpdateTime:    timestamppb.New(task.UpdateTime),
+	}
+
+	if task.Priority != nil {
+		pb.Priority = wrapperspb.Int32(*task.Priority)
 	}
 
 	if task.GeoLocation != nil {
@@ -209,10 +213,14 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 		AssignedBy:    pb.AssignedBy,
 		CreateTime:    pb.CreateTime.AsTime(),
 		UpdateTime:    pb.UpdateTime.AsTime(),
-		Priority:      pb.Priortiy,
 		Subscriptions: subscriptionMapFromProto(pb.Subscriptions),
 		Properties:    make(map[string][]byte, len(pb.Properties)),
 		Attachments:   make([]Attachment, 0, len(pb.Attachments)),
+	}
+
+	if pb.Priority != nil {
+		i := pb.Priority.Value // create a copy of the value
+		t.Priority = &i
 	}
 
 	if t.Tags == nil {

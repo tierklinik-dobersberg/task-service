@@ -58,7 +58,7 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		UpdateTime:  timestamppb.Now(),
 		Status:      r.Status,
 		Attachments: r.Attachments,
-		Priortiy:    r.Priority,
+		Priority:    r.Priority,
 	}
 
 	// validate tags and status
@@ -74,8 +74,10 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		return nil, err
 	}
 
-	if err := validateBoardPriority(board, r.Priority); err != nil {
-		return nil, err
+	if r.Priority != nil {
+		if err := validateBoardPriority(board, r.Priority.Value); err != nil {
+			return nil, err
+		}
 	}
 
 	switch v := r.Location.(type) {
