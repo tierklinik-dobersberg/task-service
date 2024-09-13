@@ -29,6 +29,7 @@ type (
 	Timeline struct {
 		ID          primitive.ObjectID `bson:"_id,omitempty"`
 		TaskID      primitive.ObjectID `bson:"taskId"`
+		BoardID     primitive.ObjectID `bson:"boardId"`
 		CreateTime  time.Time          `bson:"createTime"`
 		UserID      string             `bson:"userId"`
 		ValueChange *ValueChange       `bson:"valueChange,omitempty"`

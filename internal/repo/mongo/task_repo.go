@@ -86,7 +86,7 @@ func (db *Repository) AssignTask(ctx context.Context, taskID, assigneeID, assign
 			return nil, err
 		}
 
-		db.recordChange(ctx, taskID, &ValueChange{
+		db.recordChange(ctx, taskID, old.BoardId, &ValueChange{
 			FieldName: "assignee_id",
 			OldValue:  old.AssigneeId,
 			NewValue:  assigneeID,
@@ -136,7 +136,12 @@ func (db *Repository) CompleteTask(ctx context.Context, taskID string) (*tasksv1
 	defer session.EndSession(ctx)
 
 	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
-		db.recordChange(ctx, taskID, &ValueChange{
+		old, err := db.GetTask(ctx, taskID)
+		if err != nil {
+			return nil, err
+		}
+
+		db.recordChange(ctx, taskID, old.BoardId, &ValueChange{
 			FieldName: "complete_time",
 			NewValue:  now.Format(time.RFC3339),
 		})
@@ -417,7 +422,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 		for _, change := range changes {
 			change.NewValue = change.ValueFrom(&t)
 
-			db.recordChange(ctx, update.TaskId, change)
+			db.recordChange(ctx, update.TaskId, t.BoardID, change)
 		}
 
 		return t.ToProto(), nil
@@ -805,9 +810,14 @@ func (db *Repository) GetTaskTimeline(ctx context.Context, ids []string) ([]*tas
 	filter := bson.M{}
 
 	if len(oids) > 0 {
-		filter["_id"] = bson.M{
+		filter["taskId"] = bson.M{
 			"$in": oids,
 		}
+	}
+
+	blob, err := json.MarshalIndent(filter, "", "   ")
+	if err == nil {
+		log.Println(string(blob))
 	}
 
 	result, err := db.timeline.Find(ctx, filter, options.Find().SetSort(bson.D{
@@ -838,10 +848,16 @@ func (db *Repository) GetTaskTimeline(ctx context.Context, ids []string) ([]*tas
 	return pb, nil
 }
 
-func (db *Repository) recordChange(ctx context.Context, taskId string, change timelineValue) {
+func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, change timelineValue) {
 	oid, err := primitive.ObjectIDFromHex(taskId)
 	if err != nil {
 		slog.Error("failed to parse task id", "id", taskId, "error", err)
+		return
+	}
+
+	boardOid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		slog.Error("failed to parse board id", "id", boardId, "error", err)
 		return
 	}
 
@@ -852,6 +868,7 @@ func (db *Repository) recordChange(ctx context.Context, taskId string, change ti
 
 	r := &Timeline{
 		TaskID:     oid,
+		BoardID:    boardOid,
 		CreateTime: time.Now(),
 		UserID:     id,
 	}
