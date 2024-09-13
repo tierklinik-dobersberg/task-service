@@ -217,6 +217,7 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 			}
 
 			setModel["status"] = update.Status
+
 		case "due_time":
 			if update.DueTime.IsValid() {
 				setModel["dueTime"] = update.DueTime.AsTime()
@@ -549,8 +550,8 @@ func (db *Repository) DeleteTasksMatchingQuery(ctx context.Context, queries []*t
 	return err
 }
 
-func (db *Repository) UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error {
-	oid, err := primitive.ObjectIDFromHex(boardId)
+func (db *Repository) UpdateTaskSubscription(ctx context.Context, taskId string, subscription *tasksv1.Subscription) error {
+	oid, err := primitive.ObjectIDFromHex(taskId)
 	if err != nil {
 		return fmt.Errorf("failed to parse task id: %w", err)
 	}
@@ -559,7 +560,7 @@ func (db *Repository) UpdateTaskSubscription(ctx context.Context, boardId string
 		"_id": oid,
 	}
 
-	res, err := db.boards.UpdateOne(
+	res, err := db.tasks.UpdateOne(
 		ctx,
 		filter,
 		bson.M{
@@ -588,6 +589,33 @@ func (db *Repository) DeleteTagsFromTasks(ctx context.Context, boardId string, t
 				"tags": tag,
 			},
 		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Repository) DeletesPriorityFromTasks(ctx context.Context, boardId string, priority, replacement int32) error {
+	update := bson.M{
+		"$unset": bson.M{
+			"priority": "",
+		},
+	}
+
+	if replacement > 0 {
+		update = bson.M{
+			"$set": bson.M{
+				"priority": replacement,
+			},
+		}
+	}
+	_, err := db.tasks.UpdateMany(
+		ctx,
+		bson.M{"boardId": boardId, "priority": priority},
+		update,
 	)
 
 	if err != nil {

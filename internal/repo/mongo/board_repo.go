@@ -144,6 +144,8 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 		}
 	}
 
+	// FIXME(ppacher): update task tags, statuses and priorites if we deleted some
+
 	updateModel := bson.M{}
 
 	if len(setModel) > 0 {
