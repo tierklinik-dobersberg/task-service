@@ -36,6 +36,8 @@ func New(ctx context.Context, repo repo.Backend, common *services.Common) (*Serv
 }
 
 func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1.CreateTaskRequest]) (*connect.Response[tasksv1.CreateTaskResponse], error) {
+	remoteUser := auth.From(ctx)
+
 	board, err := svc.ensureBoardPermissions(ctx, req.Msg.BoardId, "write")
 	if err != nil {
 		return nil, err
@@ -48,17 +50,27 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 
 	r := req.Msg
 	model := &tasksv1.Task{
-		BoardId:     r.BoardId,
-		Title:       r.Title,
-		Description: r.Description,
-		CreatorId:   id,
-		Tags:        r.Tags,
-		DueTime:     r.DueTime,
-		CreateTime:  timestamppb.Now(),
-		UpdateTime:  timestamppb.Now(),
-		Status:      r.Status,
-		Attachments: r.Attachments,
-		Priority:    r.Priority,
+		BoardId:       r.BoardId,
+		Title:         r.Title,
+		Description:   r.Description,
+		CreatorId:     id,
+		Tags:          r.Tags,
+		DueTime:       r.DueTime,
+		CreateTime:    timestamppb.Now(),
+		UpdateTime:    timestamppb.Now(),
+		Status:        r.Status,
+		Attachments:   r.Attachments,
+		Priority:      r.Priority,
+		Subscriptions: map[string]*tasksv1.Subscription{},
+	}
+
+	// Automatically subscribe the creator to task updates
+	if remoteUser != nil {
+		model.Subscriptions[remoteUser.ID] = &tasksv1.Subscription{
+			UserId:            remoteUser.ID,
+			NotificationTypes: []tasksv1.NotificationType{},
+			Unsubscribed:      false,
+		}
 	}
 
 	// validate tags and status
