@@ -859,6 +859,43 @@ func (db *Repository) GetTaskTimeline(ctx context.Context, ids []string) ([]*tas
 	return pb, nil
 }
 
+func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId string, comment string) error {
+	var id string
+
+	if user := auth.From(ctx); user != nil {
+		id = user.ID
+	}
+
+	c := TaskComment{
+		Comment:   comment,
+		Reactions: make([]Reaction, 0),
+	}
+
+	oid, err := primitive.ObjectIDFromHex(taskId)
+	if err != nil {
+		return fmt.Errorf("failed to parse task id: %w", err)
+	}
+
+	boardOid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return fmt.Errorf("failed to parse board id: %w", err)
+	}
+
+	_, err = db.timeline.InsertOne(ctx, &Timeline{
+		TaskID:     oid,
+		BoardID:    boardOid,
+		CreateTime: time.Now(),
+		UserID:     id,
+		Comment:    &c,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, change timelineValue) {
 	oid, err := primitive.ObjectIDFromHex(taskId)
 	if err != nil {

@@ -365,6 +365,19 @@ func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Reque
 	}), nil
 }
 
+func (svc *Service) CreateTaskComment(ctx context.Context, req *connect.Request[tasksv1.CreateTaskCommentRequest]) (*connect.Response[emptypb.Empty], error) {
+	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.repo.CreateTaskComment(ctx, req.Msg.TaskId, task.BoardId, req.Msg.Comment); err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(new(emptypb.Empty)), nil
+}
+
 func (svc *Service) ensureBoardPermissions(ctx context.Context, boardID string, op string) (*tasksv1.Board, error) {
 	board, err := svc.repo.GetBoard(ctx, boardID)
 	if err != nil {

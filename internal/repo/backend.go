@@ -96,6 +96,8 @@ type TaskBackend interface {
 	UpdateTaskSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
 
 	GetTaskTimeline(ctx context.Context, ids []string) ([]*tasksv1.TaskTimelineEntry, error)
+
+	CreateTaskComment(ctx context.Context, taskId, boardId string, comment string) error
 }
 
 type Backend interface {
