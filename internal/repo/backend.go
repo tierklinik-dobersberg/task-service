@@ -98,6 +98,8 @@ type TaskBackend interface {
 	GetTaskTimeline(ctx context.Context, ids []string) ([]*tasksv1.TaskTimelineEntry, error)
 
 	CreateTaskComment(ctx context.Context, taskId, boardId string, comment string) error
+
+	UpdateTaskComment(ctx context.Context, update *tasksv1.UpdateTaskCommentRequest) (*tasksv1.TaskTimelineEntry, error)
 }
 
 type Backend interface {

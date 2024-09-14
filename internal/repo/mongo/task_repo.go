@@ -896,6 +896,55 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 	return nil
 }
 
+func (db *Repository) UpdateTaskComment(ctx context.Context, update *tasksv1.UpdateTaskCommentRequest) (*tasksv1.TaskTimelineEntry, error) {
+	oid, err := primitive.ObjectIDFromHex(update.TimelineId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse task id: %w", err)
+	}
+
+	upd := bson.M{}
+
+	switch v := update.Kind.(type) {
+	case *tasksv1.UpdateTaskCommentRequest_Delete:
+		upd["deleteTime"] = time.Now()
+	case *tasksv1.UpdateTaskCommentRequest_OffTopic:
+		upd["offTopicTime"] = time.Now()
+	case *tasksv1.UpdateTaskCommentRequest_NewText:
+		upd["comment"] = v.NewText
+		upd["editTime"] = time.Now()
+	default:
+		return nil, fmt.Errorf("unsupported update operation")
+	}
+
+	filter := bson.M{
+		"_id": oid,
+	}
+
+	if user := auth.From(ctx); user != nil {
+		filter["userId"] = user.ID
+	}
+
+	res := db.timeline.FindOneAndUpdate(ctx, filter, bson.M{
+		"$set": bson.M{
+			"comment": upd,
+		},
+	}, options.FindOneAndUpdate().SetReturnDocument(options.After))
+
+	if err := res.Err(); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, repo.ErrTaskNotFound
+		}
+		return nil, fmt.Errorf("failed to perform update operation: %w", err)
+	}
+
+	var t Timeline
+	if err := res.Decode(&t); err != nil {
+		return nil, err
+	}
+
+	return t.ToProto()
+}
+
 func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, change timelineValue) {
 	oid, err := primitive.ObjectIDFromHex(taskId)
 	if err != nil {

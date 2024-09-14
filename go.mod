@@ -9,7 +9,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
-	github.com/tierklinik-dobersberg/apis v0.6.0
+	github.com/tierklinik-dobersberg/apis v0.7.0
 	go.mongodb.org/mongo-driver v1.16.1
 	google.golang.org/protobuf v1.34.2
 )

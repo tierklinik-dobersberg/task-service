@@ -22,8 +22,11 @@ type (
 	}
 
 	TaskComment struct {
-		Comment   string     `bson:"comment"`
-		Reactions []Reaction `bson:"reactions"`
+		Comment    string     `bson:"comment"`
+		Reactions  []Reaction `bson:"reactions"`
+		EditTime   time.Time  `bson:"editTime,omitempty"`
+		DeleteTime time.Time  `bson:"deleteTime,omitempty"`
+		Offtopic   time.Time  `bson:"offTopicTime,omitempty"`
 	}
 
 	Timeline struct {
@@ -123,10 +126,24 @@ func reactionListToProto(list []Reaction) []*tasksv1.TaskReaction {
 }
 
 func (c *TaskComment) ToProto() *tasksv1.TaskComment {
-	return &tasksv1.TaskComment{
+	pb := &tasksv1.TaskComment{
 		Comment:   c.Comment,
 		Reactions: reactionListToProto(c.Reactions),
 	}
+
+	if !c.EditTime.IsZero() {
+		pb.EditTime = timestamppb.New(c.EditTime)
+	}
+
+	if !c.DeleteTime.IsZero() {
+		pb.DeleteTime = timestamppb.New(c.DeleteTime)
+	}
+
+	if !c.Offtopic.IsZero() {
+		pb.MarkAsOfftopicTime = timestamppb.New(c.Offtopic)
+	}
+
+	return pb
 }
 
 func (t *Timeline) ToProto() (*tasksv1.TaskTimelineEntry, error) {

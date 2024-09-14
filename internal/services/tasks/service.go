@@ -170,6 +170,36 @@ func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasks
 	}), nil
 }
 
+func (svc *Service) UpdateTaskComment(ctx context.Context, req *connect.Request[tasksv1.UpdateTaskCommentRequest]) (*connect.Response[emptypb.Empty], error) {
+	if user := auth.From(ctx); user == nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("authentication required"))
+	}
+
+	e, err := svc.repo.UpdateTaskComment(ctx, req.Msg)
+	if err != nil {
+		if errors.Is(err, repo.ErrTaskNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+		return nil, err
+	}
+
+	task, err := svc.repo.GetTask(ctx, e.TaskId)
+	if err != nil {
+		if errors.Is(err, repo.ErrTaskNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.TaskEvent{
+		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+		Task:      task,
+	})
+
+	return connect.NewResponse(new(emptypb.Empty)), nil
+}
+
 func (svc *Service) GetTimeline(ctx context.Context, req *connect.Request[tasksv1.GetTimelineRequest]) (*connect.Response[tasksv1.GetTimelineResponse], error) {
 	for _, id := range req.Msg.TaskIds {
 		if _, _, err := svc.ensureTaskPermissions(ctx, id, "read"); err != nil {
