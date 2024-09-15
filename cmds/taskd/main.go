@@ -130,6 +130,7 @@ func main() {
 	common := &services.Common{
 		Resolver: resolver,
 		Config:   *cfg,
+		Mails:    mails,
 	}
 
 	boardService, err := boards.New(ctx, repo, common)
