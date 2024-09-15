@@ -5,14 +5,25 @@ import (
 	"time"
 
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
+	"github.com/tierklinik-dobersberg/task-service/internal/colorutil"
 )
 
 type Task struct {
-	Status      *tasksv1.TaskStatus
-	Tags        []*tasksv1.TaskTag
+	Status      *TaskStatus
+	Tags        []TaskTag
 	Title       string
 	Description string
 	DueTime     *time.Time
+}
+
+type TaskStatus struct {
+	*tasksv1.TaskStatus
+	Foreground string
+}
+
+type TaskTag struct {
+	*tasksv1.TaskTag
+	Foreground string
 }
 
 type TaskCommentNotificationContext struct {
@@ -37,7 +48,19 @@ func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, com
 	if task.Status != "" {
 		for _, s := range board.AllowedTaskStatus {
 			if s.Status == task.Status {
-				ctx.Task.Status = s
+				ctx.Task.Status = &TaskStatus{
+					TaskStatus: s,
+				}
+
+				if s.Color != "" {
+					r, g, b := colorutil.HexToRBGColor(s.Color)
+					if colorutil.UseLightTextOnBackground(r, g, b) {
+						ctx.Task.Status.Foreground = "white"
+					} else {
+						ctx.Task.Status.Foreground = "black"
+					}
+				}
+
 				break
 			}
 		}
@@ -46,7 +69,20 @@ func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, com
 	for _, tag := range task.Tags {
 		for _, t := range board.AllowedTaskTags {
 			if t.Tag == tag {
-				ctx.Task.Tags = append(ctx.Task.Tags, t)
+				ct := TaskTag{
+					TaskTag: t,
+				}
+
+				if t.Color != "" {
+					r, g, b := colorutil.HexToRBGColor(t.Color)
+
+					if colorutil.UseLightTextOnBackground(r, g, b) {
+						ct.Foreground = "white"
+					} else {
+						ct.Foreground = "black"
+					}
+				}
+				ctx.Task.Tags = append(ctx.Task.Tags, ct)
 				break
 			}
 		}

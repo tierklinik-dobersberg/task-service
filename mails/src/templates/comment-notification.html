@@ -27,8 +27,8 @@ bodyClass: bg-gray-postmark-lighter
         <td valign="middle" class="w-1/3 pl-1">
           Status
         </td>
-        <td valign="middle">
-          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .Task.Status.color }}">
+        <td valign="middle" class="py-1">
+          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .Task.Status.color }}; color: {{ .Task.Status.Foreground }}">
             {{ .Task.Status.status }}
           </span>
         </td>
@@ -40,9 +40,9 @@ bodyClass: bg-gray-postmark-lighter
         <td valign="middle" class="w-1/3 pl-1">
           Tags
         </td>
-        <td valign="middle">
+        <td valign="middle" class="py-1">
           {{ range .Task.Tags }}
-          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .color }}">
+          <span class="inline-block px-1 py-0.5 rounded-md text-xs" style="background-color: {{ .color }}; color: {{ .Foreground }}">
             {{ .tag }}
           </span>
           {{ end }}
@@ -55,7 +55,7 @@ bodyClass: bg-gray-postmark-lighter
         <td valign="middle" class="w-1/3 pl-1">
           Fertig bis
         </td>
-        <td valign="middle">
+        <td valign="middle" class="py-1">
           {{ .Task.DueTime }}
         </td>
       </tr>
