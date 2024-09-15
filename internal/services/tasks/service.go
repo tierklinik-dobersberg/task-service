@@ -408,7 +408,7 @@ func (svc *Service) CreateTaskComment(ctx context.Context, req *connect.Request[
 		return nil, err
 	}
 
-	if svc.Config.IdmURL != "" {
+	if user := auth.From(ctx); svc.Config.IdmURL != "" && user != nil {
 		go func() {
 			subscriptions := make(map[string]*tasksv1.Subscription)
 			for user, sub := range board.Subscriptions {
@@ -442,7 +442,8 @@ func (svc *Service) CreateTaskComment(ctx context.Context, req *connect.Request[
 			cli := idmv1connect.NewNotifyServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
 			for _, sub := range subscriptions {
 				res, err := cli.SendNotification(context.Background(), connect.NewRequest(&idmv1.SendNotificationRequest{
-					TargetUsers: []string{sub.UserId},
+					SenderUserId: user.ID,
+					TargetUsers:  []string{sub.UserId},
 					PerUserTemplateContext: map[string]*structpb.Struct{
 						sub.UserId: value,
 					},
