@@ -20,6 +20,8 @@ type Task struct {
 	Title       string
 	Description string
 	DueTime     *time.Time
+	Assignee    string
+	Creator     string
 }
 
 type TaskStatus struct {
@@ -71,6 +73,8 @@ func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, com
 			ID:          task.Id,
 			Title:       task.Title,
 			Description: task.Description,
+			Assignee:    task.AssigneeId,
+			Creator:     task.CreatorId,
 		},
 	}
 
