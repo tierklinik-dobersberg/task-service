@@ -123,12 +123,6 @@ func (db *Repository) CompleteTask(ctx context.Context, taskID string) (*tasksv1
 
 	now := time.Now()
 
-	update := bson.M{
-		"$set": bson.M{
-			"completeTime": now,
-		},
-	}
-
 	session, err := db.client.StartSession()
 	if err != nil {
 		return nil, err
@@ -139,6 +133,23 @@ func (db *Repository) CompleteTask(ctx context.Context, taskID string) (*tasksv1
 		old, err := db.GetTask(ctx, taskID)
 		if err != nil {
 			return nil, err
+		}
+
+		board, err := db.GetBoard(ctx, old.BoardId)
+		if err != nil {
+			return nil, err
+		}
+
+		setModel := bson.M{
+			"completeTime": now,
+		}
+
+		if board.DoneStatus != "" {
+			setModel["status"] = board.DoneStatus
+		}
+
+		update := bson.M{
+			"$set": setModel,
 		}
 
 		db.recordChange(ctx, taskID, old.BoardId, &ValueChange{
@@ -907,6 +918,7 @@ func (db *Repository) UpdateTaskComment(ctx context.Context, update *tasksv1.Upd
 	switch v := update.Kind.(type) {
 	case *tasksv1.UpdateTaskCommentRequest_Delete:
 		upd["deleteTime"] = time.Now()
+		upd["comment"] = ""
 	case *tasksv1.UpdateTaskCommentRequest_OffTopic:
 		upd["offTopicTime"] = time.Now()
 	case *tasksv1.UpdateTaskCommentRequest_NewText:

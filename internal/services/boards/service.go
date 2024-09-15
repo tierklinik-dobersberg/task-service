@@ -60,19 +60,16 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 		Subscriptions:         make(map[string]*tasksv1.Subscription),
 	}
 
-	// validate the initial status value exists in the list of allowed
+	// validate the initial and done status values exists in the list of allowed
 	// task statuses
 	if cr.InitialStatus != "" {
-		found := false
-		for _, status := range cr.AllowedTaskStatus {
-			if status.Status == cr.InitialStatus {
-				found = true
-				break
-			}
+		if err := validateStatusExists(cr.InitialStatus, model.AllowedTaskStatus); err != nil {
+			return nil, err
 		}
-
-		if !found {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("initial task status %q is not available", cr.InitialStatus))
+	}
+	if cr.DoneStatus != "" {
+		if err := validateStatusExists(cr.DoneStatus, model.AllowedTaskStatus); err != nil {
+			return nil, err
 		}
 	}
 
@@ -125,8 +122,22 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 }
 
 func (svc *Service) UpdateBoard(ctx context.Context, req *connect.Request[tasksv1.UpdateBoardRequest]) (*connect.Response[tasksv1.UpdateBoardResponse], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+	board, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId)
+	if err != nil {
 		return nil, err
+	}
+
+	// validate the initial and done status values exists in the list of allowed
+	// task statuses
+	if req.Msg.InitialStatus != "" {
+		if err := validateStatusExists(req.Msg.InitialStatus, board.AllowedTaskStatus); err != nil {
+			return nil, err
+		}
+	}
+	if req.Msg.DoneStatus != "" {
+		if err := validateStatusExists(req.Msg.DoneStatus, board.AllowedTaskStatus); err != nil {
+			return nil, err
+		}
 	}
 
 	res, err := svc.repo.UpdateBoard(ctx, req.Msg)
@@ -164,7 +175,7 @@ func (svc *Service) ListBoards(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) DeleteBoard(ctx context.Context, req *connect.Request[tasksv1.DeleteBoardRequest]) (*connect.Response[emptypb.Empty], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.Id); err != nil {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.Id); err != nil {
 		return nil, err
 	}
 
@@ -211,7 +222,7 @@ func (svc *Service) GetBoard(ctx context.Context, req *connect.Request[tasksv1.G
 }
 
 func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[tasksv1.AddTaskStatusRequest]) (*connect.Response[tasksv1.AddTaskStatusResponse], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
 
@@ -232,7 +243,7 @@ func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[task
 }
 
 func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskStatusRequest]) (*connect.Response[tasksv1.DeleteTaskStatusResponse], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
 
@@ -253,7 +264,7 @@ func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[t
 }
 
 func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1.AddTaskTagRequest]) (*connect.Response[tasksv1.AddTaskTagResponse], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
 
@@ -274,7 +285,7 @@ func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskTagRequest]) (*connect.Response[tasksv1.DeleteTaskTagResponse], error) {
-	if err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
 
@@ -335,28 +346,38 @@ func (svc *Service) ManageSubscription(ctx context.Context, req *connect.Request
 
 }
 
-func (svc *Service) ensureBoardOwner(ctx context.Context, boardID string) error {
+func (svc *Service) ensureBoardOwner(ctx context.Context, boardID string) (*tasksv1.Board, error) {
 	remoteUser := auth.From(ctx)
 
 	if remoteUser == nil {
 		if os.Getenv("DEBUG") != "" {
-			return nil
+			return nil, nil
 		}
 
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("authentication required"))
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("authentication required"))
 	}
 
 	board, err := svc.repo.GetBoard(ctx, boardID)
 	if err != nil {
 		if errors.Is(err, repo.ErrBoardNotFound) {
-			return connect.NewError(connect.CodeNotFound, err)
+			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
-		return err
+		return nil, err
 	}
 
 	if board.OwnerId != remoteUser.ID {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you are not allowed to perform this operation"))
+		return board, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you are not allowed to perform this operation"))
 	}
 
-	return nil
+	return board, nil
+}
+
+func validateStatusExists(status string, list []*tasksv1.TaskStatus) error {
+	for _, s := range list {
+		if s.Status == status {
+			return nil
+		}
+	}
+
+	return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("status value %q is not defined", status))
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,7 +20,9 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/services"
+	"github.com/tierklinik-dobersberg/task-service/mails/src/templates"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -396,13 +399,78 @@ func (svc *Service) DeleteTaskAttachment(ctx context.Context, req *connect.Reque
 }
 
 func (svc *Service) CreateTaskComment(ctx context.Context, req *connect.Request[tasksv1.CreateTaskCommentRequest]) (*connect.Response[emptypb.Empty], error) {
-	task, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	task, board, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
 	if err != nil {
 		return nil, err
 	}
 
 	if err := svc.repo.CreateTaskComment(ctx, req.Msg.TaskId, task.BoardId, req.Msg.Comment); err != nil {
 		return nil, err
+	}
+
+	if svc.Config.IdmURL != "" {
+		go func() {
+			subscriptions := make(map[string]*tasksv1.Subscription)
+			for user, sub := range board.Subscriptions {
+				// TODO(ppacher): merge notification types?
+				subscriptions[user] = sub
+			}
+			for user, sub := range task.Subscriptions {
+				subscriptions[user] = sub
+			}
+
+			tmplCtx, err := templates.NewCommentNotificationContext(board, task, &tasksv1.TaskComment{
+				Comment: req.Msg.Comment,
+			})
+			if err != nil {
+				slog.Error("failed to prepare template context for comment notification", "error", err.Error())
+				return
+			}
+
+			value, err := structpb.NewStruct(tmplCtx)
+			if err != nil {
+				slog.Error("failed to prepare template context for comment notification", "error", err.Error())
+				return
+			}
+
+			body, err := svc.Mails.ReadFile("mails/comment-notification.html")
+			if err != nil {
+				slog.Error("failed to read comment notification template", "error", err.Error())
+				return
+			}
+
+			cli := idmv1connect.NewNotifyServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+			for _, sub := range subscriptions {
+				res, err := cli.SendNotification(context.Background(), connect.NewRequest(&idmv1.SendNotificationRequest{
+					TargetUsers: []string{sub.UserId},
+					PerUserTemplateContext: map[string]*structpb.Struct{
+						sub.UserId: value,
+					},
+					Message: &idmv1.SendNotificationRequest_Email{
+						Email: &idmv1.EMailMessage{
+							Subject: "Neuer Kommentar zu " + task.Title,
+							Body:    string(body),
+						},
+					},
+				}))
+
+				if err != nil {
+					slog.Error("failed to send comment notification", "user", sub.UserId, "error", err.Error())
+				} else {
+					err := false
+					for _, d := range res.Msg.Deliveries {
+						if d.Error != "" {
+							err = true
+							slog.Error("failed to send comment notification", "user", sub.UserId, "error", d.Error, "kind", d.ErrorKind.String())
+						}
+					}
+
+					if !err {
+						slog.Info("successfully send comment notification", "user", sub.UserId)
+					}
+				}
+			}
+		}()
 	}
 
 	return connect.NewResponse(new(emptypb.Empty)), nil

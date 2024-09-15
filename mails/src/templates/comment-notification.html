@@ -1,0 +1,65 @@
+---
+bodyClass: bg-gray-postmark-lighter
+---
+
+<extends src="src/layouts/with-avatar.html">
+  <block name="content">
+
+    <p class="mt-1.5 mb-[5px] text-base leading-6 text-gray-postmark-dark">
+      {{ displayname .Sender }} hat soeben einen neuen Kommentar zur Aufgabe "{{ .Task.Title }}" erstellt.
+    </p>
+
+    <table
+      class="w-full p-4 my-4 rounded table-fixed bg-gray-postmark-lightest dark:bg-gray-postmark-dark"
+    >
+      <tr>
+        <td valign="middle" align="center" class="w-1/2 pl-1 text-xl font-bold">
+          {{ .Comment.comment }}
+        </td>
+      </tr>
+    </table>
+
+    <table
+      class="w-full p-4 my-4 rounded table-fixed bg-gray-postmark-lightest dark:bg-gray-postmark-dark"
+    >
+      {{ if .Task.Status }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Status
+        </td>
+        <td valign="middle">
+          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .Task.Status.color }}">
+            {{ .Task.Status.status }}
+          </span>
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.Tags }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Tags
+        </td>
+        <td valign="middle">
+          {{ range .Task.Tags }}
+          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .color }}">
+            {{ .tag }}
+          </span>
+          {{ end }}
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.DueTime }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Fertig bis
+        </td>
+        <td valign="middle">
+          {{ .Task.DueTime }}
+        </td>
+      </tr>
+      {{ end }}
+    </table>
+  </block>
+</extends>

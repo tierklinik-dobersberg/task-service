@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,6 +26,9 @@ import (
 	"github.com/tierklinik-dobersberg/task-service/internal/services/tasks"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
+
+//go:embed mails
+var mails embed.FS
 
 type resolver map[string]int
 
@@ -75,6 +79,15 @@ func main() {
 			return auth.RemoteHeaderExtractor(ctx, req)
 		},
 	)
+
+	files, err := mails.ReadDir("mails")
+	if err != nil {
+		slog.Error("failed to check content os embedded mail file-system", "error", err)
+	} else {
+		for _, f := range files {
+			slog.Info("mail file-system", "name", f.Name(), "is-directory", f.IsDir())
+		}
+	}
 
 	interceptors := []connect.Interceptor{
 		log.NewLoggingInterceptor(),

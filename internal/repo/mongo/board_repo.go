@@ -183,6 +183,9 @@ func (db *Repository) UpdateBoard(ctx context.Context, update *tasksv1.UpdateBoa
 		case "eligible_user_ids":
 			setModel[field] = update.EligibleUserIds
 
+		case "done_status":
+			setModel[field] = update.DoneStatus
+
 		default:
 			return nil, fmt.Errorf("invalid path %q in update_mask", p)
 		}

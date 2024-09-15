@@ -3,3 +3,7 @@ go.work.sum
 /cmds/taskcli
 docker-compose.yml
 .gitignore
+.github
+mails/dist
+mails/node_modules
+mails/build_local

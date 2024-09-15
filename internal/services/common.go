@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,8 @@ import (
 type Common struct {
 	Resolver *permission.Resolver
 	Config   config.Config
+
+	Mails embed.FS
 }
 
 func (svc *Common) IsAllowed(ctx context.Context, board *tasksv1.Board, op string) error {

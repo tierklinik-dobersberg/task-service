@@ -1,0 +1,48 @@
+---
+bodyClass: bg-gray-postmark-lighter
+---
+<extends src="src/layouts/main.html">
+  <block name="template">
+    <table class="w-full font-sans email-wrapper bg-gray-postmark-lighter">
+      <tr>
+        <td align="center">
+          <table class="w-full email-content">
+            <component src="src/components/header.html"></component>
+            <raw>
+              <tr>
+                <td class="w-full bg-white dark:bg-gray-400 email-body">
+                  <table align="center" class="email-body_inner w-[570px] dark:bg-gray-400 bg-white mx-auto sm:w-full">
+                    <tr>
+                      <td class="p-[45px]">
+                        <div class="text-base">
+                          {{ $avatar := userAvatar .User .Ctx }}
+                          {{ if (ne $avatar "") }}
+                            <div valign="middle" align="center">
+                                <img src="{{ $avatar }}" class="inline-block w-32 h-32 rounded-full">
+                            </div>
+                          {{ end }}
+
+                          <h1 class="mt-1.5 text-2xl font-bold text-left text-gray-postmark-darker">
+                            Hallo {{ displayName .User }},
+                          </h1>
+
+                          <block name="content"></block>
+                          
+                          <p class="mt-1.5 mb-[5px] text-base leading-6 text-gray-postmark-dark">
+                            Danke,
+                            <br>Das {{ .IDM.SiteName }} Team
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </raw>
+            <component src="src/components/footer.html"></component>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </block>
+</extends>

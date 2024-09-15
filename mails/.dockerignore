@@ -1,0 +1,6 @@
+./node_modules
+./dist
+./build_local
+README.md
+config.js
+.git

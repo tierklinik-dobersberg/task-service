@@ -57,6 +57,7 @@ type (
 		EligibleRoleIds  []string                `bson:"eligibleRoleIds,omitempty"`
 		Subscriptions    map[string]Subscription `bson:"subscriptions"`
 		InitialStatus    string                  `bson:"initialStatus"`
+		DoneStatus       string                  `bson:"doneStatus"`
 	}
 )
 
@@ -90,6 +91,8 @@ func boardTagFromProtoFieldName(name string) string {
 		return "eligibleRoleIds"
 	case "subscriptions":
 		return "subscriptions"
+	case "done_status":
+		return "doneStatus"
 	}
 
 	return name // fallback
@@ -257,6 +260,7 @@ func (b *Board) ToProto() *tasksv1.Board {
 		EligibleUserIds:       b.EligibleUserIds,
 		HelpText:              b.HelpText,
 		InitialStatus:         b.InitialStatus,
+		DoneStatus:            b.DoneStatus,
 	}
 
 	for idx, s := range b.TaskStatuses {
@@ -295,6 +299,7 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		Subscriptions:    subscriptionMapFromProto(pb.Subscriptions),
 		InitialStatus:    pb.InitialStatus,
 		HelpText:         pb.HelpText,
+		DoneStatus:       pb.DoneStatus,
 		// TODO(ppacher): kind
 	}
 
