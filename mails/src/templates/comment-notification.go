@@ -14,6 +14,7 @@ import (
 )
 
 type Task struct {
+	ID          string
 	Status      *TaskStatus
 	Tags        []TaskTag
 	Title       string
@@ -67,6 +68,7 @@ func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, com
 			Comment: html,
 		},
 		Task: Task{
+			ID:          task.Id,
 			Title:       task.Title,
 			Description: task.Description,
 		},
