@@ -14,7 +14,7 @@ bodyClass: bg-gray-postmark-lighter
     >
       <tr>
         <td valign="middle" align="center" class="w-1/2 pl-1 text-xl font-bold">
-          {{ .Comment.comment }}
+          {{ .Comment.comment | safeHTML }}
         </td>
       </tr>
     </table>
@@ -28,7 +28,7 @@ bodyClass: bg-gray-postmark-lighter
           Status
         </td>
         <td valign="middle" class="py-1">
-          <span class="inline-block px-1 py-0.5 rounded-md" style="background-color: {{ .Task.Status.color }}; color: {{ .Task.Status.Foreground }}">
+          <span class="inline-block px-1 py-0.5 rounded-md text-xs font-medium" style="background-color: {{ .Task.Status.color }}; color: {{ .Task.Status.Foreground }}">
             {{ .Task.Status.status }}
           </span>
         </td>
@@ -42,7 +42,7 @@ bodyClass: bg-gray-postmark-lighter
         </td>
         <td valign="middle" class="py-1">
           {{ range .Task.Tags }}
-          <span class="inline-block px-1 py-0.5 rounded-md text-xs" style="background-color: {{ .color }}; color: {{ .Foreground }}">
+          <span class="inline-block px-1 py-0.5 rounded-md text-xs font-medium" style="background-color: {{ .color }}; color: {{ .Foreground }}">
             {{ .tag }}
           </span>
           {{ end }}

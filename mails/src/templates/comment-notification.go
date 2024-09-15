@@ -1,11 +1,16 @@
 package templates
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/task-service/internal/colorutil"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 )
 
 type Task struct {
@@ -31,9 +36,36 @@ type TaskCommentNotificationContext struct {
 	Task    Task
 }
 
+func markdownToHTML(comment string) (string, error) {
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+		goldmark.WithRendererOptions(
+			html.WithHardWraps(),
+			html.WithXHTML(),
+		),
+	)
+
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(comment), &buf); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
 func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, comment *tasksv1.TaskComment) (map[string]any, error) {
+	html, err := markdownToHTML(comment.Comment)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx := &TaskCommentNotificationContext{
-		Comment: comment,
+		Comment: &tasksv1.TaskComment{
+			Comment: html,
+		},
 		Task: Task{
 			Title:       task.Title,
 			Description: task.Description,
