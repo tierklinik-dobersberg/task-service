@@ -1179,20 +1179,28 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 		}
 	}
 
-	for key, values := range resultIn {
-		result[key] = bson.M{
-			"$in": values,
-		}
+	keys := make(map[string]struct{}, len(resultIn))
+
+	for key := range resultIn {
+		keys[key] = struct{}{}
+	}
+	for key := range resultNotIn {
+		keys[key] = struct{}{}
 	}
 
-	notFilter := bson.M{}
-	for key, values := range resultNotIn {
-		notFilter[key] = bson.M{
-			"$in": values,
+	for key := range keys {
+		keyFilter := bson.M{}
+
+		if v, ok := resultIn[key]; ok && len(v) > 0 {
+			keyFilter["$in"] = v
 		}
-	}
-	if len(notFilter) > 0 {
-		result["$not"] = notFilter
+		if v, ok := resultNotIn[key]; ok && len(v) > 0 {
+			keyFilter["$nin"] = v
+		}
+
+		if len(keyFilter) > 0 {
+			result[key] = keyFilter
+		}
 	}
 
 	return result
