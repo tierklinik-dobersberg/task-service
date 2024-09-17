@@ -19,6 +19,7 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/services"
+	"github.com/tierklinik-dobersberg/task-service/internal/taskql"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -353,6 +354,81 @@ func (svc *Service) ListTasks(ctx context.Context, req *connect.Request[tasksv1.
 			results = append(results, r)
 		}
 	}
+
+	return connect.NewResponse(&tasksv1.ListTasksResponse{
+		Tasks:      results,
+		TotalCount: int64(count),
+	}), nil
+}
+
+func (svc *Service) ParseFilter(ctx context.Context, req *connect.Request[tasksv1.ParseFilterRequest]) (*connect.Response[tasksv1.ParseFilterResponse], error) {
+	board, err := svc.repo.GetBoard(ctx, req.Msg.BoardId)
+	if err != nil {
+		if errors.Is(err, repo.ErrBoardNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+
+		return nil, err
+	}
+
+	userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+
+	l := taskql.New(userCli, board)
+
+	if err := l.Process(req.Msg.Query); err != nil {
+		return nil, err
+	}
+
+	token, values, err := l.ExpectedNextToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&tasksv1.ParseFilterResponse{
+		ExpectedToken: string(token),
+		Values:        values,
+	}), nil
+}
+
+func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv1.FilterTasksRequest]) (*connect.Response[tasksv1.ListTasksResponse], error) {
+	board, err := svc.repo.GetBoard(ctx, req.Msg.BoardId)
+	if err != nil {
+		if errors.Is(err, repo.ErrBoardNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+
+		return nil, err
+	}
+
+	userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+
+	l := taskql.New(userCli, board)
+
+	if err := l.Process(req.Msg.Query); err != nil {
+		return nil, err
+	}
+
+	res, count, err := svc.repo.FilterTasks(ctx, l.Query(), req.Msg.Pagination)
+	if err != nil {
+		return nil, err
+	}
+
+	boards := make(map[string]error)
+
+	results := make([]*tasksv1.Task, 0, len(res))
+	for _, r := range res {
+		err, ok := boards[r.BoardId]
+		if !ok {
+			_, err = svc.ensureBoardPermissions(ctx, r.BoardId, "read")
+			boards[r.BoardId] = err
+		}
+
+		if err == nil {
+			results = append(results, r)
+		}
+	}
+
+	// TODO(ppacher): support for the tkd.common.v1.View field
 
 	return connect.NewResponse(&tasksv1.ListTasksResponse{
 		Tasks:      results,

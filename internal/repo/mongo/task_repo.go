@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"strconv"
 	"time"
 
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
+	"github.com/tierklinik-dobersberg/task-service/internal/taskql"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -907,6 +909,108 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 	return nil
 }
 
+// FilterTasks is like ListTasks but filters based on taskql queries.
+func (db *Repository) FilterTasks(ctx context.Context, q map[taskql.Field]*taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+	filter := filterFromTaskQlQuery(q)
+
+	paginationPipeline := mongo.Pipeline{}
+
+	if pagination != nil {
+		if len(pagination.SortBy) > 0 {
+			sort := bson.D{}
+			for _, field := range pagination.SortBy {
+				var dir int
+				switch field.Direction {
+				case commonv1.SortDirection_SORT_DIRECTION_ASC:
+					dir = 1
+				default:
+					dir = -1
+				}
+
+				// FIXME(ppacher): convert from proto field-name to mongoDB document key
+				sort = append(sort, bson.E{Key: field.FieldName, Value: dir})
+			}
+
+			paginationPipeline = append(paginationPipeline, bson.D{
+				{Key: "$sort", Value: sort},
+			})
+		}
+
+		if pagination.PageSize > 0 {
+			paginationPipeline = append(paginationPipeline, bson.D{{Key: "$skip", Value: pagination.PageSize * pagination.GetPage()}})
+			paginationPipeline = append(paginationPipeline, bson.D{{Key: "$limit", Value: pagination.PageSize}})
+		}
+	}
+
+	pipeline := mongo.Pipeline{}
+
+	if len(filter) > 0 {
+		pipeline = append(pipeline, bson.D{
+			{
+				Key:   "$match",
+				Value: filter,
+			},
+		})
+	}
+
+	pipeline = append(pipeline, bson.D{
+		{
+			Key: "$facet",
+			Value: bson.M{
+				"metadata": []bson.D{
+					{{
+						Key:   "$count",
+						Value: "totalCount",
+					}},
+				},
+				"data": paginationPipeline,
+			},
+		},
+	})
+
+	blob, err := json.MarshalIndent(pipeline, "", "   ")
+	if err == nil {
+		log.Println(string(blob))
+	}
+
+	res, err := db.tasks.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to perform find operation: %w", err)
+	}
+
+	var result []struct {
+		Metadata []struct {
+			TotalCount int `bson:"totalCount"`
+		} `bson:"metadata"`
+		Data []Task
+	}
+
+	if err := res.All(ctx, &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to decode result: %w", err)
+	}
+
+	// nothing found
+	if len(result) == 0 {
+		return nil, 0, nil
+	}
+
+	if len(result) > 1 {
+		slog.Warn("received unexpected result count for aggregation state", "count", len(result))
+	}
+
+	pbResult := make([]*tasksv1.Task, len(result[0].Data))
+	for idx, r := range result[0].Data {
+		pbResult[idx] = r.ToProto()
+	}
+
+	var count int
+	if len(result[0].Metadata) == 1 {
+		count = result[0].Metadata[0].TotalCount
+	}
+
+	return pbResult, count, nil
+}
+
 func (db *Repository) UpdateTaskComment(ctx context.Context, update *tasksv1.UpdateTaskCommentRequest) (*tasksv1.TaskTimelineEntry, error) {
 	oid, err := primitive.ObjectIDFromHex(update.TimelineId)
 	if err != nil {
@@ -992,6 +1096,84 @@ func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, 
 	if _, err := db.timeline.InsertOne(ctx, r); err != nil {
 		slog.Error("failed to insert timeline record", "id", taskId, "error", err)
 	}
+}
+
+func filterFromTaskQlQuery(q map[taskql.Field]*taskql.Query) bson.M {
+	result := bson.M{}
+
+	resultIn := map[string]bson.A{}
+	resultNotIn := map[string]bson.A{}
+
+	add := func(n string, q *taskql.Query) {
+		for _, v := range q.NotIn {
+			resultNotIn[n] = append(resultNotIn[n], v)
+		}
+
+		for _, v := range q.In {
+			resultIn[n] = append(resultIn[n], v)
+		}
+	}
+
+	for field, query := range q {
+		switch field {
+		case taskql.FieldAssignee:
+			add("assignee", query)
+
+		case taskql.FieldCreator:
+			add("creator", query)
+
+		case taskql.FieldStatus:
+			add("status", query)
+
+		case taskql.FieldTag:
+			add("tags", query)
+
+		case taskql.FieldPriority:
+			add("priority", query)
+
+		case taskql.FieldCompleted:
+			var value string
+			var not bool
+
+			switch {
+			case len(query.In) > 0:
+				value = query.In[0]
+
+			case len(query.NotIn) > 0:
+				value = query.NotIn[0]
+				not = true
+			}
+
+			b, err := strconv.ParseBool(value)
+			if err == nil {
+				if not {
+					b = !b
+				}
+
+				result["completeTime"] = bson.M{
+					"$exists": b,
+				}
+			}
+		}
+	}
+
+	for key, values := range resultIn {
+		result[key] = bson.M{
+			"$in": values,
+		}
+	}
+
+	notFilter := bson.M{}
+	for key, values := range resultNotIn {
+		notFilter[key] = bson.M{
+			"$in": values,
+		}
+	}
+	if len(notFilter) > 0 {
+		result["$not"] = notFilter
+	}
+
+	return result
 }
 
 var _ repo.TaskBackend = (*Repository)(nil)

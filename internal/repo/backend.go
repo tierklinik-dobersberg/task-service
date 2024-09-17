@@ -6,6 +6,7 @@ import (
 
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
+	"github.com/tierklinik-dobersberg/task-service/internal/taskql"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -78,6 +79,9 @@ type TaskBackend interface {
 	// task queriers. The queries are passes as the are since different backend implementations
 	// might be able to apply optimizations when search for multiple tasks.
 	ListTasks(context.Context, []*tasksv1.TaskQuery, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
+
+	// FilterTasks is like ListTasks but filters based on taskql queries.
+	FilterTasks(context.Context, map[taskql.Field]*taskql.Query, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
 
 	// AddTaskAttachment adds a new attachment to a task
 	AddTaskAttachment(context.Context, string, string, *tasksv1.Attachment) (*tasksv1.Task, error)
