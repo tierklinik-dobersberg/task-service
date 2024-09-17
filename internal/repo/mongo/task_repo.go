@@ -910,7 +910,7 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 }
 
 // FilterTasks is like ListTasks but filters based on taskql queries.
-func (db *Repository) FilterTasks(ctx context.Context, q map[taskql.Field]*taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+func (db *Repository) FilterTasks(ctx context.Context, q map[taskql.Field]taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
 	filter := filterFromTaskQlQuery(q)
 
 	paginationPipeline := mongo.Pipeline{}
@@ -1098,7 +1098,7 @@ func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, 
 	}
 }
 
-func filterFromTaskQlQuery(q map[taskql.Field]*taskql.Query) bson.M {
+func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 	if len(q) == 0 {
 		return nil
 	}
@@ -1108,7 +1108,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]*taskql.Query) bson.M {
 	resultIn := map[string]bson.A{}
 	resultNotIn := map[string]bson.A{}
 
-	add := func(n string, q *taskql.Query) {
+	add := func(n string, q taskql.Query) {
 		for _, v := range q.NotIn {
 			if n == "priority" {
 				vi, err := strconv.Atoi(v)

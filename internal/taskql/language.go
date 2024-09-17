@@ -21,11 +21,7 @@ type Query struct {
 	NotIn []string
 }
 
-func (q *Query) Len() int {
-	if q == nil {
-		return 0
-	}
-
+func (q Query) Len() int {
 	return len(q.In) + len(q.NotIn)
 }
 
@@ -36,7 +32,7 @@ type Language struct {
 	l          sync.Mutex
 	conditions []*Condition
 	lastToken  Token
-	queries    map[Field]*Query
+	queries    map[Field]Query
 }
 
 func New(userClient idmv1connect.UserServiceClient, board *tasksv1.Board) *Language {
@@ -55,7 +51,7 @@ func (l *Language) Process(input string) error {
 	l.l.Lock()
 	defer l.l.Unlock()
 
-	l.queries = make(map[Field]*Query)
+	l.queries = make(map[Field]Query)
 	l.conditions = conditions
 	l.lastToken = lastToken
 
@@ -69,8 +65,7 @@ func (l *Language) Process(input string) error {
 		// ensure there's already a query entry for the field name
 		query, ok := l.queries[fn]
 		if !ok {
-			query = &Query{}
-			l.queries[fn] = query
+			query = Query{}
 		}
 
 		// Append the value to the correct query slice.
@@ -79,16 +74,22 @@ func (l *Language) Process(input string) error {
 		} else {
 			query.In = append(query.In, c.Value)
 		}
+
+		l.queries[fn] = query
 	}
 
 	return nil
 }
 
-func (l *Language) Query(ctx context.Context) (map[Field]*Query, error) {
+func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 	l.l.Lock()
 	defer l.l.Unlock()
 
 	copy := maps.Clone(l.queries)
+
+	if copy == nil {
+		return nil, nil
+	}
 
 	// resolve all user ids if there are some
 	if copy[FieldCreator].Len() > 0 || copy[FieldAssignee].Len() > 0 {

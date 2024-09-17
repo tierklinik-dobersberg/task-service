@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/bufbuild/connect-go"
+	"github.com/davecgh/go-spew/spew"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
@@ -400,7 +401,7 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
-	var query map[taskql.Field]*taskql.Query
+	var query map[taskql.Field]taskql.Query
 
 	if req.Msg.Query != "" {
 		userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
@@ -417,6 +418,9 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 			return nil, err
 		}
 	}
+
+	// Dump query for debugging purposes
+	spew.Dump(query)
 
 	res, count, err := svc.repo.FilterTasks(ctx, query, req.Msg.Pagination)
 	if err != nil {
