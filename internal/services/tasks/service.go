@@ -408,7 +408,12 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
-	res, count, err := svc.repo.FilterTasks(ctx, l.Query(), req.Msg.Pagination)
+	query, err := l.Query(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, count, err := svc.repo.FilterTasks(ctx, query, req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}

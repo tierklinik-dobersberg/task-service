@@ -5,17 +5,24 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"sync"
 
 	"github.com/bufbuild/connect-go"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
+	"github.com/tierklinik-dobersberg/apis/pkg/auth"
+	"github.com/tierklinik-dobersberg/apis/pkg/data"
 )
 
 type Query struct {
 	In    []string
 	NotIn []string
+}
+
+func (q *Query) Len() int {
+	return len(q.In) + len(q.NotIn)
 }
 
 type Language struct {
@@ -73,11 +80,60 @@ func (l *Language) Process(input string) error {
 	return nil
 }
 
-func (l *Language) Query() map[Field]*Query {
+func (l *Language) Query(ctx context.Context) (map[Field]*Query, error) {
 	l.l.Lock()
 	defer l.l.Unlock()
 
-	return maps.Clone(l.queries)
+	copy := maps.Clone(l.queries)
+
+	// resolve all user ids if there are some
+	if copy[FieldCreator].Len() > 0 || copy[FieldAssignee].Len() > 0 {
+		users, err := l.userClient.ListUsers(ctx, connect.NewRequest(&idmv1.ListUsersRequest{}))
+		if err != nil {
+			return nil, err
+		}
+
+		userMap := data.IndexSlice(users.Msg.Users, func(p *idmv1.Profile) string {
+			return p.User.Username
+		})
+
+		replace := func(list []string) {
+			for idx, u := range list {
+				// Special value
+				if u == "me" {
+					user := auth.From(ctx)
+					if user != nil {
+						list[idx] = user.ID
+						continue
+					}
+				}
+
+				user, ok := userMap[u]
+				if ok {
+					list[idx] = user.User.Id
+				}
+			}
+		}
+
+		replace(copy[FieldCreator].In)
+		replace(copy[FieldCreator].NotIn)
+		replace(copy[FieldAssignee].In)
+		replace(copy[FieldAssignee].NotIn)
+	}
+
+	priorityMap := data.IndexSlice(l.board.AllowedTaskPriorities, func(p *tasksv1.TaskPriority) string {
+		return p.Name
+	})
+
+	// resolve priority values
+	for idx, v := range copy[FieldPriority].In {
+		p, ok := priorityMap[v]
+		if ok {
+			copy[FieldPriority].In[idx] = strconv.Itoa(int(p.Priority))
+		}
+	}
+
+	return copy, nil
 }
 
 func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, error) {

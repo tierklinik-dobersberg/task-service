@@ -1106,11 +1106,29 @@ func filterFromTaskQlQuery(q map[taskql.Field]*taskql.Query) bson.M {
 
 	add := func(n string, q *taskql.Query) {
 		for _, v := range q.NotIn {
-			resultNotIn[n] = append(resultNotIn[n], v)
+			if n == "priority" {
+				vi, err := strconv.Atoi(v)
+				if err != nil {
+					continue
+				}
+
+				resultNotIn[n] = append(resultNotIn[n], vi)
+			} else {
+				resultNotIn[n] = append(resultNotIn[n], v)
+			}
 		}
 
 		for _, v := range q.In {
-			resultIn[n] = append(resultIn[n], v)
+			if n == "priority" {
+				vi, err := strconv.Atoi(v)
+				if err != nil {
+					continue
+				}
+
+				resultIn[n] = append(resultIn[n], vi)
+			} else {
+				resultIn[n] = append(resultIn[n], v)
+			}
 		}
 	}
 
