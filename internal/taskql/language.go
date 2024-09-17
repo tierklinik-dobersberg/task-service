@@ -22,6 +22,10 @@ type Query struct {
 }
 
 func (q *Query) Len() int {
+	if q == nil {
+		return 0
+	}
+
 	return len(q.In) + len(q.NotIn)
 }
 

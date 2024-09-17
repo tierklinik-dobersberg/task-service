@@ -1099,6 +1099,10 @@ func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, 
 }
 
 func filterFromTaskQlQuery(q map[taskql.Field]*taskql.Query) bson.M {
+	if len(q) == 0 {
+		return nil
+	}
+
 	result := bson.M{}
 
 	resultIn := map[string]bson.A{}

@@ -400,17 +400,22 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
-	userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+	var query map[taskql.Field]*taskql.Query
 
-	l := taskql.New(userCli, board)
+	if req.Msg.Query != "" {
+		userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
 
-	if err := l.Process(req.Msg.Query); err != nil {
-		return nil, err
-	}
+		l := taskql.New(userCli, board)
 
-	query, err := l.Query(ctx)
-	if err != nil {
-		return nil, err
+		if err := l.Process(req.Msg.Query); err != nil {
+			return nil, err
+		}
+
+		var err error
+		query, err = l.Query(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	res, count, err := svc.repo.FilterTasks(ctx, query, req.Msg.Pagination)
