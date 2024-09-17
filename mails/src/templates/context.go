@@ -24,6 +24,11 @@ type Task struct {
 	Creator     string
 }
 
+type Board struct {
+	DisplayName string
+	ID          string
+}
+
 type TaskStatus struct {
 	*tasksv1.TaskStatus
 	Foreground string
@@ -34,9 +39,10 @@ type TaskTag struct {
 	Foreground string
 }
 
-type TaskCommentNotificationContext struct {
+type TemplateContext struct {
 	Comment *tasksv1.TaskComment
 	Task    Task
+	Board   Board
 }
 
 func markdownToHTML(comment string) (string, error) {
@@ -59,23 +65,39 @@ func markdownToHTML(comment string) (string, error) {
 	return buf.String(), nil
 }
 
-func NewCommentNotificationContext(board *tasksv1.Board, task *tasksv1.Task, comment *tasksv1.TaskComment) (map[string]any, error) {
-	html, err := markdownToHTML(comment.Comment)
-	if err != nil {
-		return nil, err
+func NewTemplateContext(board *tasksv1.Board, task *tasksv1.Task, comment *tasksv1.TaskComment) (map[string]any, error) {
+	var descriptionHTML string
+
+	if task.Description != "" {
+		var err error
+		descriptionHTML, err = markdownToHTML(task.Description)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	ctx := &TaskCommentNotificationContext{
-		Comment: &tasksv1.TaskComment{
-			Comment: html,
-		},
+	ctx := &TemplateContext{
 		Task: Task{
 			ID:          task.Id,
 			Title:       task.Title,
-			Description: task.Description,
+			Description: descriptionHTML,
 			Assignee:    task.AssigneeId,
 			Creator:     task.CreatorId,
 		},
+		Board: Board{
+			DisplayName: board.DisplayName,
+			ID:          board.Id,
+		},
+	}
+
+	if comment != nil {
+		commentHTML, err := markdownToHTML(comment.Comment)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Comment = &tasksv1.TaskComment{
+			Comment: commentHTML,
+		}
 	}
 
 	if task.DueTime.IsValid() {

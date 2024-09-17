@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,9 +19,7 @@ import (
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"github.com/tierklinik-dobersberg/task-service/internal/services"
-	"github.com/tierklinik-dobersberg/task-service/mails/src/templates"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -130,6 +127,18 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		EventType: tasksv1.EventType_EVENT_TYPE_CREATED,
 	})
 
+	if user := auth.From(ctx); svc.Config.IdmURL != "" && user != nil {
+		go func() {
+			name := user.DisplayName
+			if name == "" {
+				name = user.Username
+			}
+
+			subj := fmt.Sprintf("%s: %s hat eine neue Aufgabe %q erstellt", board.DisplayName, name, model.Title)
+			svc.SendNotification(board, model, nil, subj, user.ID, "creation-notification.html")
+		}()
+	}
+
 	return connect.NewResponse(&tasksv1.CreateTaskResponse{
 		Task: model,
 	}), nil
@@ -154,13 +163,26 @@ func (svc *Service) DeleteTask(ctx context.Context, req *connect.Request[tasksv1
 }
 
 func (svc *Service) CompleteTask(ctx context.Context, req *connect.Request[tasksv1.CompleteTaskRequest]) (*connect.Response[tasksv1.CompleteTaskResponse], error) {
-	if _, _, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write"); err != nil {
+	task, board, err := svc.ensureTaskPermissions(ctx, req.Msg.TaskId, "write")
+	if err != nil {
 		return nil, err
 	}
 
 	t, err := svc.repo.CompleteTask(ctx, req.Msg.TaskId)
 	if err != nil {
 		return nil, err
+	}
+
+	if user := auth.From(ctx); svc.Config.IdmURL != "" && user != nil {
+		go func() {
+			name := user.DisplayName
+			if name == "" {
+				name = user.Username
+			}
+
+			subj := fmt.Sprintf("%s: %s hat die Aufgabe %q fertig gestellt", board.DisplayName, name, task.Title)
+			svc.SendNotification(board, task, nil, subj, user.ID, "done-notification.html")
+		}()
 	}
 
 	svc.PublishEvent(&tasksv1.TaskEvent{
@@ -410,67 +432,15 @@ func (svc *Service) CreateTaskComment(ctx context.Context, req *connect.Request[
 
 	if user := auth.From(ctx); svc.Config.IdmURL != "" && user != nil {
 		go func() {
-			subscriptions := make(map[string]*tasksv1.Subscription)
-			for user, sub := range board.Subscriptions {
-				// TODO(ppacher): merge notification types?
-				subscriptions[user] = sub
-			}
-			for user, sub := range task.Subscriptions {
-				subscriptions[user] = sub
+			name := user.DisplayName
+			if name == "" {
+				name = user.Username
 			}
 
-			tmplCtx, err := templates.NewCommentNotificationContext(board, task, &tasksv1.TaskComment{
+			subj := fmt.Sprintf("%s hat einen neuen Kommentar zur Aufgabe %q erstellt", name, task.Title)
+			svc.SendNotification(board, task, &tasksv1.TaskComment{
 				Comment: req.Msg.Comment,
-			})
-			if err != nil {
-				slog.Error("failed to prepare template context for comment notification", "error", err.Error())
-				return
-			}
-
-			value, err := structpb.NewStruct(tmplCtx)
-			if err != nil {
-				slog.Error("failed to prepare template context for comment notification", "error", err.Error())
-				return
-			}
-
-			body, err := svc.Mails.ReadFile("mails/comment-notification.html")
-			if err != nil {
-				slog.Error("failed to read comment notification template", "error", err.Error())
-				return
-			}
-
-			cli := idmv1connect.NewNotifyServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
-			for _, sub := range subscriptions {
-				res, err := cli.SendNotification(context.Background(), connect.NewRequest(&idmv1.SendNotificationRequest{
-					SenderUserId: user.ID,
-					TargetUsers:  []string{sub.UserId},
-					PerUserTemplateContext: map[string]*structpb.Struct{
-						sub.UserId: value,
-					},
-					Message: &idmv1.SendNotificationRequest_Email{
-						Email: &idmv1.EMailMessage{
-							Subject: "Neuer Kommentar zu " + task.Title,
-							Body:    string(body),
-						},
-					},
-				}))
-
-				if err != nil {
-					slog.Error("failed to send comment notification", "user", sub.UserId, "error", err.Error())
-				} else {
-					err := false
-					for _, d := range res.Msg.Deliveries {
-						if d.Error != "" {
-							err = true
-							slog.Error("failed to send comment notification", "user", sub.UserId, "error", d.Error, "kind", d.ErrorKind.String())
-						}
-					}
-
-					if !err {
-						slog.Info("successfully send comment notification", "user", sub.UserId)
-					}
-				}
-			}
+			}, subj, user.ID, "comment-notification.html")
 		}()
 	}
 

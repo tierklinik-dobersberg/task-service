@@ -1,0 +1,78 @@
+---
+bodyClass: bg-gray-postmark-lighter
+---
+
+<extends src="src/layouts/with-avatar.html">
+  <block name="content">
+
+    <!-- Actual notification content -->
+    <block name="notification"></block>
+
+
+    <!-- Task Details -->
+    <table
+      class="w-full p-4 my-4 rounded table-fixed bg-gray-postmark-lightest dark:bg-gray-postmark-dark">
+      {{ if .Task.Status }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Status
+        </td>
+        <td valign="middle" class="py-1">
+          <span class="inline-block px-2 py-1 text-xs font-bold rounded-md" style="background-color: {{ .Task.Status.color }}; color: {{ .Task.Status.Foreground }}">
+            {{ .Task.Status.status }}
+          </span>
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.Tags }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Tags
+        </td>
+        <td valign="middle" class="py-1">
+          {{ range .Task.Tags }}
+          <span class="inline-block px-2 py-1 text-xs font-bold rounded-md" style="background-color: {{ .color }}; color: {{ .Foreground }}">
+            {{ .tag }}
+          </span>
+          {{ end }}
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.DueTime }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Fertig bis
+        </td>
+        <td valign="middle" class="py-1">
+          {{ .Task.DueTime }}
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.Creator }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Besitzer
+        </td>
+        <td valign="middle" class="py-1">
+          {{ getUser .Task.Creator | displayName }}
+        </td>
+      </tr>
+      {{ end }}
+
+      {{ if .Task.Assignee }}
+      <tr>
+        <td valign="middle" class="w-1/3 pl-1">
+          Zugewiesen
+        </td>
+        <td valign="middle" class="py-1">
+          {{ getUser .Task.Assignee | displayName }}
+        </td>
+      </tr>
+      {{ end }}
+
+    </table>
+  </block>
+</extends>

@@ -7,17 +7,22 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path"
 
 	connect "github.com/bufbuild/connect-go"
 	eventsv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/events/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/events/v1/eventsv1connect"
+	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 	"github.com/tierklinik-dobersberg/task-service/internal/config"
 	"github.com/tierklinik-dobersberg/task-service/internal/permission"
+	"github.com/tierklinik-dobersberg/task-service/mails/src/templates"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type Common struct {
@@ -91,4 +96,66 @@ func (svc *Common) PublishEvent(event proto.Message) {
 			Event: anypb,
 		}))
 	}()
+}
+
+func (svc *Common) SendNotification(board *tasksv1.Board, task *tasksv1.Task, comment *tasksv1.TaskComment, subject, senderId string, templateName string) {
+	subscriptions := make(map[string]*tasksv1.Subscription)
+	for user, sub := range board.Subscriptions {
+		// TODO(ppacher): merge notification types?
+		subscriptions[user] = sub
+	}
+	for user, sub := range task.Subscriptions {
+		subscriptions[user] = sub
+	}
+
+	tmplCtx, err := templates.NewTemplateContext(board, task, comment)
+	if err != nil {
+		slog.Error("failed to prepare template context for comment notification", "error", err.Error())
+		return
+	}
+
+	value, err := structpb.NewStruct(tmplCtx)
+	if err != nil {
+		slog.Error("failed to prepare template context for comment notification", "error", err.Error())
+		return
+	}
+
+	body, err := svc.Mails.ReadFile(path.Join("mails", templateName))
+	if err != nil {
+		slog.Error("failed to read comment notification template", "error", err.Error())
+		return
+	}
+
+	cli := idmv1connect.NewNotifyServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+	for _, sub := range subscriptions {
+		res, err := cli.SendNotification(context.Background(), connect.NewRequest(&idmv1.SendNotificationRequest{
+			SenderUserId: senderId,
+			TargetUsers:  []string{sub.UserId},
+			PerUserTemplateContext: map[string]*structpb.Struct{
+				sub.UserId: value,
+			},
+			Message: &idmv1.SendNotificationRequest_Email{
+				Email: &idmv1.EMailMessage{
+					Subject: subject,
+					Body:    string(body),
+				},
+			},
+		}))
+
+		if err != nil {
+			slog.Error("failed to send comment notification", "user", sub.UserId, "error", err.Error())
+		} else {
+			err := false
+			for _, d := range res.Msg.Deliveries {
+				if d.Error != "" {
+					err = true
+					slog.Error("failed to send comment notification", "user", sub.UserId, "error", d.Error, "kind", d.ErrorKind.String())
+				}
+			}
+
+			if !err {
+				slog.Info("successfully send comment notification", "user", sub.UserId)
+			}
+		}
+	}
 }

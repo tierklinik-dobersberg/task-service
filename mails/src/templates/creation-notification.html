@@ -5,22 +5,29 @@ bodyClass: bg-gray-postmark-lighter
 <extends src="src/layouts/task.html">
   <block name="notification">
     <p class="mt-1.5 mb-[5px] text-base leading-6 text-gray-postmark-dark">
-      {{ displayName .Sender }} hat soeben einen neuen Kommentar zur Aufgabe "{{ .Task.Title }}" erstellt.
+      {{ displayName .Sender }} hat soeben eine neue Aufgabe  in "{{ .Board.DisplayName }}" erstellt.
     </p>
 
     <table
       class="w-full p-4 my-4 rounded table-fixed bg-gray-postmark-lightest dark:bg-gray-postmark-dark"
     >
+
       <tr>
-        <td valign="middle" align="center" class="w-1/2 pl-1 text-xl">
-          {{ .Comment.comment | safeHTML }}
+        <td valign="middle" align="center" class="pl-1 text-xl border-b border-gray-postmark-lighter dark:border-gray-postmark-darker">
+          {{ .Task.Title }}
+        </td>
+
+        <td valign="middle" align="center" class="pl-1 prose">
+          {{ .Task.Description | safeHTML }}
         </td>
       </tr>
+
       <tr>
         <td valign="middle" align="center" class="p-2">
           <a href="https://my.dobersberg.vet/?taskPane={{ .Task.ID }}" class="font-bold underline cursor-pointer">Im Browser anzeigen</a>
         </td>
       </tr>
+
     </table>
   </block>
 </extends>
