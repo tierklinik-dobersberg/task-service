@@ -422,7 +422,7 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 	// Dump query for debugging purposes
 	spew.Dump(query)
 
-	res, count, err := svc.repo.FilterTasks(ctx, query, req.Msg.Pagination)
+	res, count, err := svc.repo.FilterTasks(ctx, req.Msg.BoardId, query, req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}

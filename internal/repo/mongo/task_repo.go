@@ -910,8 +910,15 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 }
 
 // FilterTasks is like ListTasks but filters based on taskql queries.
-func (db *Repository) FilterTasks(ctx context.Context, q map[taskql.Field]taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[taskql.Field]taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+	boardOid, err := primitive.ObjectIDFromHex(boardId)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to parse board id: %w", err)
+	}
+
 	filter := filterFromTaskQlQuery(q)
+
+	filter["boardId"] = boardOid
 
 	paginationPipeline := mongo.Pipeline{}
 
@@ -1100,7 +1107,7 @@ func (db *Repository) recordChange(ctx context.Context, taskId, boardId string, 
 
 func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 	if len(q) == 0 {
-		return nil
+		return bson.M{}
 	}
 
 	result := bson.M{}

@@ -81,7 +81,7 @@ type TaskBackend interface {
 	ListTasks(context.Context, []*tasksv1.TaskQuery, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
 
 	// FilterTasks is like ListTasks but filters based on taskql queries.
-	FilterTasks(context.Context, map[taskql.Field]taskql.Query, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
+	FilterTasks(context.Context, string, map[taskql.Field]taskql.Query, *commonv1.Pagination) ([]*tasksv1.Task, int, error)
 
 	// AddTaskAttachment adds a new attachment to a task
 	AddTaskAttachment(context.Context, string, string, *tasksv1.Attachment) (*tasksv1.Task, error)

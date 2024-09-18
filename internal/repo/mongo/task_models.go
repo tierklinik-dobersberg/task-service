@@ -39,12 +39,12 @@ type (
 		Title         string                  `bson:"title"`
 		Description   string                  `bson:"description"`
 		Creator       string                  `bson:"creator"`
-		Assignee      string                  `bson:"assignee,omitempty"`
+		Assignee      string                  `bson:"assignee"`
 		GeoLocation   *GeoLocation            `bson:"location,omitempty"`
 		Address       *Address                `bson:"address,omitempty"`
 		Tags          []string                `bson:"tags"`
 		Status        string                  `bson:"status"`
-		AssignedBy    string                  `bson:"assignedBy,omitempty"`
+		AssignedBy    string                  `bson:"assignedBy"`
 		DueTime       time.Time               `bson:"dueTime,omitempty"`
 		CreateTime    time.Time               `bson:"createTime"`
 		UpdateTime    time.Time               `bson:"updateTime"`
