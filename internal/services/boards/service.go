@@ -58,6 +58,7 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 		EligibleUserIds:       cr.EligibleUserIds,
 		InitialStatus:         cr.InitialStatus,
 		Subscriptions:         make(map[string]*tasksv1.Subscription),
+		Views:                 cr.Views,
 	}
 
 	// validate the initial and done status values exists in the list of allowed
@@ -95,7 +96,13 @@ func (svc *Service) CreateBoard(ctx context.Context, req *connect.Request[tasksv
 	if err := repo.EnsureUniqueField(cr.AllowedTaskPriorities, func(s *tasksv1.TaskPriority) int32 {
 		return s.Priority
 	}); err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("allowed_task_tags: priority: %w", err))
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("allowed_task_priorities: priority: %w", err))
+	}
+
+	if err := repo.EnsureUniqueField(cr.Views, func(s *tasksv1.View) string {
+		return s.Name
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("views: name: %w", err))
 	}
 
 	// ensure the board owner is automatically subscribed to updates
@@ -284,6 +291,44 @@ func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[task
 	}
 
 	b, err := svc.repo.DeleteTaskTag(ctx, req.Msg.BoardId, req.Msg.Tag)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(b), nil
+}
+
+func (svc *Service) AddView(ctx context.Context, req *connect.Request[tasksv1.AddViewRequest]) (*connect.Response[tasksv1.Board], error) {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.AddView(ctx, req.Msg.BoardId, req.Msg.View)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.PublishEvent(&tasksv1.BoardEvent{
+		Kind: &tasksv1.BoardEvent_BoardUpdated{
+			BoardUpdated: b,
+		},
+	})
+
+	return connect.NewResponse(b), nil
+}
+
+func (svc *Service) DeleteView(ctx context.Context, req *connect.Request[tasksv1.DeleteViewRequest]) (*connect.Response[tasksv1.Board], error) {
+	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
+		return nil, err
+	}
+
+	b, err := svc.repo.DeleteView(ctx, req.Msg.BoardId, req.Msg.ViewName)
 	if err != nil {
 		return nil, err
 	}

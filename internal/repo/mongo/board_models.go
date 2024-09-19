@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/go-multierror"
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -42,6 +43,14 @@ type (
 		Unsubscribed bool                       `bson:"unsubscribed"`
 	}
 
+	View struct {
+		Name      string `bson:"name"`
+		Filter    string `bson:"filter"`
+		GroupBy   string `bson:"groupBy"`
+		SortField string `bson:"sortField"`
+		SortDesc  bool   `bson:"sortDesc"`
+	}
+
 	Board struct {
 		ID               primitive.ObjectID      `bson:"_id,omitempty"`
 		DisplayName      string                  `bson:"displayName,omitempty"`
@@ -58,8 +67,69 @@ type (
 		Subscriptions    map[string]Subscription `bson:"subscriptions"`
 		InitialStatus    string                  `bson:"initialStatus"`
 		DoneStatus       string                  `bson:"doneStatus"`
+		Views            []View                  `bson:"views"`
 	}
 )
+
+func (v View) ToProto() *tasksv1.View {
+	vpb := &tasksv1.View{
+		Name:         v.Name,
+		Filter:       v.Filter,
+		GroupByField: v.GroupBy,
+	}
+
+	if v.SortField != "" {
+		vpb.Sort = &commonv1.Sort{
+			FieldName: v.SortField,
+			Direction: commonv1.SortDirection_SORT_DIRECTION_ASC,
+		}
+
+		if v.SortDesc {
+			vpb.Sort.Direction = commonv1.SortDirection_SORT_DIRECTION_DESC
+		}
+	}
+
+	return vpb
+}
+
+func viewFromProto(pb *tasksv1.View) View {
+	v := View{
+		Name:    pb.Name,
+		Filter:  pb.Filter,
+		GroupBy: pb.GroupByField,
+	}
+
+	if pb.Sort != nil {
+		v.SortField = pb.Sort.FieldName
+
+		if pb.Sort.Direction == commonv1.SortDirection_SORT_DIRECTION_DESC {
+			v.SortDesc = true
+		}
+	}
+
+	return v
+}
+
+func viewListFromProto(list []*tasksv1.View) []View {
+	result := make([]View, len(list))
+
+	for idx, v := range list {
+		result[idx] = viewFromProto(v)
+	}
+
+	return result
+}
+
+func viewListToProto(list []View) []*tasksv1.View {
+	result := make([]*tasksv1.View, len(list))
+
+	for idx, v := range list {
+		result[idx] = v.ToProto()
+	}
+
+	return result
+
+}
 
 func boardTagFromProtoFieldName(name string) string {
 	switch name {
@@ -93,6 +163,8 @@ func boardTagFromProtoFieldName(name string) string {
 		return "subscriptions"
 	case "done_status":
 		return "doneStatus"
+	case "views":
+		return "views"
 	}
 
 	return name // fallback
@@ -260,6 +332,7 @@ func (b *Board) ToProto() *tasksv1.Board {
 		HelpText:              b.HelpText,
 		InitialStatus:         b.InitialStatus,
 		DoneStatus:            b.DoneStatus,
+		Views:                 viewListToProto(b.Views),
 	}
 
 	for idx, s := range b.TaskStatuses {
@@ -299,7 +372,7 @@ func boardFromProto(pb *tasksv1.Board) (*Board, error) {
 		InitialStatus:    pb.InitialStatus,
 		HelpText:         pb.HelpText,
 		DoneStatus:       pb.DoneStatus,
-		// TODO(ppacher): kind
+		Views:            viewListFromProto(pb.Views),
 	}
 
 	return b, nil
@@ -330,6 +403,12 @@ func (b *Board) Validate() error {
 		return s.Priority
 	}); err != nil {
 		errs.Errors = append(errs.Errors, fmt.Errorf("allowed_task_priorities: priority: %w", err))
+	}
+
+	if err := repo.EnsureUniqueField(b.Views, func(v View) string {
+		return v.Name
+	}); err != nil {
+		errs.Errors = append(errs.Errors, fmt.Errorf("views: %w", err))
 	}
 
 	if b.InitialStatus != "" {

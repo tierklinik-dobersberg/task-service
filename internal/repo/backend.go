@@ -47,6 +47,12 @@ type BoardBackend interface {
 	// tag from any task that has it assigned.
 	DeleteTaskTag(context.Context, string, string) (*tasksv1.Board, error)
 
+	// AddView adds a new task view to the board.
+	AddView(context.Context, string, *tasksv1.View) (*tasksv1.Board, error)
+
+	// DeleteView deletes a task view from the board.
+	DeleteView(context.Context, string, string) (*tasksv1.Board, error)
+
 	UpdateBoardSubscription(ctx context.Context, boardId string, subscription *tasksv1.Subscription) error
 }
 
