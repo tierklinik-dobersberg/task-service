@@ -248,7 +248,6 @@ func (b *Board) ToProto() *tasksv1.Board {
 		Id:                    b.ID.Hex(),
 		DisplayName:           b.DisplayName,
 		Description:           b.Description,
-		Kind:                  &tasksv1.Board_List{},
 		ReadPermission:        b.ReadPermissions.ToProto(),
 		WritePermission:       b.WritePermissions.ToProto(),
 		OwnerId:               b.OwnerID,

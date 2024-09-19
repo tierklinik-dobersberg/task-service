@@ -221,7 +221,7 @@ func (svc *Service) GetBoard(ctx context.Context, req *connect.Request[tasksv1.G
 	}), nil
 }
 
-func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[tasksv1.AddTaskStatusRequest]) (*connect.Response[tasksv1.AddTaskStatusResponse], error) {
+func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[tasksv1.AddTaskStatusRequest]) (*connect.Response[tasksv1.Board], error) {
 	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
@@ -237,12 +237,10 @@ func (svc *Service) AddTaskStatus(ctx context.Context, req *connect.Request[task
 		},
 	})
 
-	return connect.NewResponse(&tasksv1.AddTaskStatusResponse{
-		Board: b,
-	}), nil
+	return connect.NewResponse(b), nil
 }
 
-func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskStatusRequest]) (*connect.Response[tasksv1.DeleteTaskStatusResponse], error) {
+func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskStatusRequest]) (*connect.Response[tasksv1.Board], error) {
 	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
@@ -258,12 +256,10 @@ func (svc *Service) DeleteTaskStatus(ctx context.Context, req *connect.Request[t
 		},
 	})
 
-	return connect.NewResponse(&tasksv1.DeleteTaskStatusResponse{
-		Board: b,
-	}), nil
+	return connect.NewResponse(b), nil
 }
 
-func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1.AddTaskTagRequest]) (*connect.Response[tasksv1.AddTaskTagResponse], error) {
+func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1.AddTaskTagRequest]) (*connect.Response[tasksv1.Board], error) {
 	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
@@ -279,12 +275,10 @@ func (svc *Service) AddTaskTag(ctx context.Context, req *connect.Request[tasksv1
 		},
 	})
 
-	return connect.NewResponse(&tasksv1.AddTaskTagResponse{
-		Board: b,
-	}), nil
+	return connect.NewResponse(b), nil
 }
 
-func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskTagRequest]) (*connect.Response[tasksv1.DeleteTaskTagResponse], error) {
+func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[tasksv1.DeleteTaskTagRequest]) (*connect.Response[tasksv1.Board], error) {
 	if _, err := svc.ensureBoardOwner(ctx, req.Msg.BoardId); err != nil {
 		return nil, err
 	}
@@ -300,9 +294,7 @@ func (svc *Service) DeleteTaskTag(ctx context.Context, req *connect.Request[task
 		},
 	})
 
-	return connect.NewResponse(&tasksv1.DeleteTaskTagResponse{
-		Board: b,
-	}), nil
+	return connect.NewResponse(b), nil
 }
 
 func (svc *Service) ManageSubscription(ctx context.Context, req *connect.Request[tasksv1.ManageSubscriptionRequest]) (*connect.Response[emptypb.Empty], error) {
