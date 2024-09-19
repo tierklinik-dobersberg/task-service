@@ -910,14 +910,19 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 }
 
 // FilterTasks is like ListTasks but filters based on taskql queries.
-func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[taskql.Field]taskql.Query, pagination *commonv1.Pagination) ([]*tasksv1.Task, int, error) {
+func (db *Repository) FilterTasks(ctx context.Context, boardIds []string, q map[taskql.Field]taskql.Query, groupBy string, pagination *commonv1.Pagination) ([]*tasksv1.TaskGroup, int, error) {
 	filter := filterFromTaskQlQuery(q)
 
-	filter["boardId"] = boardId
+	if len(boardIds) > 0 {
+		filter["boardId"] = bson.M{
+			"$in": boardIds,
+		}
+	}
 
 	paginationPipeline := mongo.Pipeline{}
 
 	if pagination != nil {
+
 		if len(pagination.SortBy) > 0 {
 			sort := bson.D{}
 			for _, field := range pagination.SortBy {
@@ -955,6 +960,23 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		})
 	}
 
+	var groupByFieldName any = primitive.Null{}
+	if groupBy != "" {
+		groupByFieldName = boardTagFromProtoFieldName(groupBy)
+	}
+
+	paginationPipeline = append(paginationPipeline, bson.D{
+		{
+			Key: "$group",
+			Value: bson.M{
+				"_id": groupByFieldName,
+				"group": bson.M{
+					"$push": "$$ROOT",
+				},
+			},
+		},
+	})
+
 	pipeline = append(pipeline, bson.D{
 		{
 			Key: "$facet",
@@ -984,7 +1006,11 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		Metadata []struct {
 			TotalCount int `bson:"totalCount"`
 		} `bson:"metadata"`
-		Data []Task
+
+		Data []struct {
+			Group      []Task `bson:"group"`
+			GroupValue any    `bson:"_id"`
+		} `bson:"data"`
 	}
 
 	if err := res.All(ctx, &result); err != nil {
@@ -1000,9 +1026,17 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		slog.Warn("received unexpected result count for aggregation state", "count", len(result))
 	}
 
-	pbResult := make([]*tasksv1.Task, len(result[0].Data))
+	pbResult := make([]*tasksv1.TaskGroup, len(result[0].Data))
 	for idx, r := range result[0].Data {
-		pbResult[idx] = r.ToProto()
+		grp := &tasksv1.TaskGroup{
+			Tasks: make([]*tasksv1.Task, len(r.Group)),
+		}
+
+		for idx, t := range r.Group {
+			grp.Tasks[idx] = t.ToProto()
+		}
+
+		pbResult[idx] = grp
 	}
 
 	var count int

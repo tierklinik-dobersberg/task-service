@@ -425,5 +425,19 @@ func (b *Board) Validate() error {
 		}
 	}
 
+	if b.DoneStatus != "" {
+		found := false
+		for _, s := range b.TaskStatuses {
+			if s.Status == b.DoneStatus {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			errs.Errors = append(errs.Errors, fmt.Errorf("done_status: status value %q is not allowed", b.DoneStatus))
+		}
+	}
+
 	return errs.ErrorOrNil()
 }

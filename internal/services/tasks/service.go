@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -422,7 +423,7 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 	// Dump query for debugging purposes
 	spew.Dump(query)
 
-	res, count, err := svc.repo.FilterTasks(ctx, req.Msg.BoardId, query, req.Msg.Pagination)
+	res, count, err := svc.repo.FilterTasks(ctx, []string{req.Msg.BoardId}, query, "", req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -430,15 +431,17 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 	boards := make(map[string]error)
 
 	results := make([]*tasksv1.Task, 0, len(res))
-	for _, r := range res {
-		err, ok := boards[r.BoardId]
-		if !ok {
-			_, err = svc.ensureBoardPermissions(ctx, r.BoardId, "read")
-			boards[r.BoardId] = err
-		}
+	for _, grp := range res {
+		for _, r := range grp.Tasks {
+			err, ok := boards[r.BoardId]
+			if !ok {
+				_, err = svc.ensureBoardPermissions(ctx, r.BoardId, "read")
+				boards[r.BoardId] = err
+			}
 
-		if err == nil {
-			results = append(results, r)
+			if err == nil {
+				results = append(results, r)
+			}
 		}
 	}
 
@@ -447,6 +450,80 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 	return connect.NewResponse(&tasksv1.ListTasksResponse{
 		Tasks:      results,
 		TotalCount: int64(count),
+	}), nil
+}
+
+func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.QueryViewRequest]) (*connect.Response[tasksv1.QueryViewResponse], error) {
+	boardIds := req.Msg.BoardIds
+
+	allBoards, err := svc.repo.ListBoards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	boardMap := make(map[string]*tasksv1.Board)
+
+	for _, b := range allBoards {
+		boardMap[b.Id] = b
+	}
+
+	if len(boardIds) == 0 {
+		boardIds = slices.Collect(maps.Keys(boardMap))
+	}
+
+	var allGroups []*tasksv1.TaskGroup
+
+	for _, id := range boardIds {
+		board, ok := boardMap[id]
+		if !ok {
+			return nil, connect.NewError(connect.CodeNotFound, repo.ErrBoardNotFound)
+		}
+
+		var query map[taskql.Field]taskql.Query
+		if req.Msg.View.Filter != "" {
+			userCli := idmv1connect.NewUserServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
+
+			l := taskql.New(userCli, board)
+
+			if err := l.Process(req.Msg.View.Filter); err != nil {
+				return nil, err
+			}
+
+			var err error
+			query, err = l.Query(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		res, _, err := svc.repo.FilterTasks(ctx, []string{id}, query, req.Msg.View.GroupByField, req.Msg.Pagination)
+		if err != nil {
+			return nil, err
+		}
+
+		allGroups = append(allGroups, res...)
+	}
+
+	boards := make(map[string]error)
+
+	results := make([]*tasksv1.TaskGroup, 0, len(allGroups))
+	for _, grp := range allGroups {
+		err, ok := boards[grp.BoardId]
+		if !ok {
+			_, err = svc.ensureBoardPermissions(ctx, grp.BoardId, "read")
+			boards[grp.BoardId] = err
+		}
+
+		if err == nil {
+			results = append(results, grp)
+		}
+	}
+
+	// TODO(ppacher): support for the tkd.common.v1.View field
+
+	return connect.NewResponse(&tasksv1.QueryViewResponse{
+		Groups:       results,
+		GroupByField: req.Msg.View.GroupByField,
+		Boards:       allBoards, // TODO(ppacher): filter boards
 	}), nil
 }
 

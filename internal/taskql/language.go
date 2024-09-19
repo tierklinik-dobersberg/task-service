@@ -145,6 +145,10 @@ func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, erro
 	l.l.Lock()
 	defer l.l.Unlock()
 
+	if l.board == nil {
+		return TokenStart, nil, fmt.Errorf("expected next token cannot be retrieved without a specified board")
+	}
+
 	if len(l.conditions) == 0 {
 		values, err := l.getPossibleValues(ctx, l.lastToken, nil)
 		if err != nil {
