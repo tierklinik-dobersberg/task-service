@@ -43,6 +43,34 @@ func New(userClient idmv1connect.UserServiceClient, board *tasksv1.Board) *Langu
 	}
 }
 
+func (l *Language) String() string {
+	l.l.Lock()
+	defer l.l.Unlock()
+
+	strs := make([]string, 0, len(l.conditions))
+
+	for idx, value := range l.conditions {
+		if idx == len(l.conditions)-1 {
+			// skip the last empty condition returned by the lexer
+			if value.FieldName == "" && value.Value == "" {
+				break
+			}
+
+			fn := Field(value.FieldName)
+			if fn.IsValid() {
+				strs = append(strs, value.FieldName + ":" + "\"" + value.Value)
+				break
+			} else {
+				strs = append(strs, value.FieldName)
+			}
+		}
+
+		strs = append(strs, value.String())
+	}
+
+	return strings.Join(strs, " ")
+}
+
 func (l *Language) Process(input string) error {
 	conditions, lastToken, err := Parse(input)
 	if err != nil {
@@ -150,32 +178,32 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 	return copy, nil
 }
 
-func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, error) {
+func (l *Language) ExpectedNextToken(ctx context.Context) (Token, string, []string, error) {
 	l.l.Lock()
 	defer l.l.Unlock()
 
 	if l.board == nil {
-		return TokenStart, nil, fmt.Errorf("expected next token cannot be retrieved without a specified board")
+		return TokenStart, "", nil, fmt.Errorf("expected next token cannot be retrieved without a specified board")
 	}
 
 	// there isn't even a single token
 	if len(l.conditions) == 0 {
 		values, err := l.getPossibleValues(ctx, nil)
 		if err != nil {
-			return TokenStart, nil, err
+			return TokenStart, "", nil, err
 		}
 
-		return TokenStart, values, nil
+		return TokenStart, "", values, nil
 	}
 
 	last := l.conditions[len(l.conditions)-1]
 
 	values, err := l.getPossibleValues(ctx, last)
 	if err != nil {
-		return TokenStart, nil, err
+		return TokenStart, last.FieldName, nil, err
 	}
 
-	return l.lastToken, values, nil
+	return l.lastToken, last.FieldName, values, nil
 }
 
 func (l *Language) getPossibleValues(ctx context.Context, last *Condition) ([]string, error) {

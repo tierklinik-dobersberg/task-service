@@ -14,6 +14,24 @@ type Condition struct {
 	Value     string
 }
 
+func (c Condition) String() string {
+	res := ""
+
+	if c.Not {
+		res = "-"
+	}
+
+	if c.FieldName != "" {
+		res += c.FieldName
+	}
+
+	if c.Value != "" {
+		res += ":" + strconv.Quote(c.Value)
+	}
+
+	return res
+}
+
 type Token string
 
 const (

@@ -382,14 +382,16 @@ func (svc *Service) ParseFilter(ctx context.Context, req *connect.Request[tasksv
 		return nil, err
 	}
 
-	token, values, err := l.ExpectedNextToken(ctx)
+	token, fieldName, values, err := l.ExpectedNextToken(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return connect.NewResponse(&tasksv1.ParseFilterResponse{
-		ExpectedToken: string(token),
-		Values:        values,
+		ExpectedToken:   string(token),
+		Values:          values,
+		LastFieldName:   fieldName,
+		NormalizedQuery: l.String(),
 	}), nil
 }
 

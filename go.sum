@@ -628,6 +628,8 @@ github.com/tierklinik-dobersberg/apis v0.8.1-0.20240919064830-5564255fe8c8 h1:nT
 github.com/tierklinik-dobersberg/apis v0.8.1-0.20240919064830-5564255fe8c8/go.mod h1:/yv2lATICewRsgIVsYqzZm3Q19MeBaOh5tXFMuFpvzw=
 github.com/tierklinik-dobersberg/apis v0.8.1-0.20240919083014-15e80f5bd954 h1:czJ6AsBNVHvVUwhoRgBk7yiVyj7P4Rw9WO8aNXduKUE=
 github.com/tierklinik-dobersberg/apis v0.8.1-0.20240919083014-15e80f5bd954/go.mod h1:/yv2lATICewRsgIVsYqzZm3Q19MeBaOh5tXFMuFpvzw=
+github.com/tierklinik-dobersberg/apis v0.9.0 h1:F5GSz8jECj0Fv6Ae2yZbq33GUDRvWuWMNEC4JLTMDtM=
+github.com/tierklinik-dobersberg/apis v0.9.0/go.mod h1:/yv2lATICewRsgIVsYqzZm3Q19MeBaOh5tXFMuFpvzw=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=
 github.com/xdg-go/pbkdf2 v1.0.0/go.mod h1:jrpuAogTd400dnrH08LKmI/xc1MbPOebTwRqcT5RDeI=
 github.com/xdg-go/scram v1.1.2 h1:FHX5I5B4i4hKRVRBCFRxq1iQRej7WO3hhBuJf+UUySY=
