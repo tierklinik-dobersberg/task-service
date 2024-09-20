@@ -85,7 +85,7 @@ func (valueChange *ValueChange) ToProto() (*tasksv1.TaskValueChange, error) {
 
 	if valueChange.OldValue != nil {
 		var err error
-		oldValue, err = structpb.NewValue(valueChange.OldValue)
+		oldValue, err = structpb.NewValue(mayConvertPrimitives(valueChange.OldValue))
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +93,7 @@ func (valueChange *ValueChange) ToProto() (*tasksv1.TaskValueChange, error) {
 
 	if valueChange.NewValue != nil {
 		var err error
-		newValue, err = structpb.NewValue(valueChange.NewValue)
+		newValue, err = structpb.NewValue(mayConvertPrimitives((valueChange.NewValue)))
 		if err != nil {
 			return nil, err
 		}

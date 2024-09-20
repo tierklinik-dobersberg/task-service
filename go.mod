@@ -1,6 +1,6 @@
 module github.com/tierklinik-dobersberg/task-service
 
-go 1.22.5
+go 1.23
 
 require (
 	github.com/bufbuild/connect-go v1.10.0
@@ -27,6 +27,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/mennanov/fmutils v0.3.0
 	github.com/mitchellh/go-server-timing v1.0.1 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect

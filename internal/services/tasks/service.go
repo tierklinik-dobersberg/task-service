@@ -13,6 +13,7 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/mennanov/fmutils"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
@@ -423,7 +424,7 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 	// Dump query for debugging purposes
 	spew.Dump(query)
 
-	res, count, err := svc.repo.FilterTasks(ctx, []string{req.Msg.BoardId}, query, "", req.Msg.Pagination)
+	res, count, err := svc.repo.FilterTasks(ctx, req.Msg.BoardId, query, "", req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -472,11 +473,19 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 
 	var allGroups []*tasksv1.TaskGroup
 
+	found := false
 	for _, id := range boardIds {
 		board, ok := boardMap[id]
 		if !ok {
 			return nil, connect.NewError(connect.CodeNotFound, repo.ErrBoardNotFound)
 		}
+
+		// ensure the user is actually allowed to query that board.
+		if err := svc.IsAllowed(ctx, board, "read"); err != nil {
+			continue
+		}
+
+		found = true
 
 		var query map[taskql.Field]taskql.Query
 		if req.Msg.View.Filter != "" {
@@ -495,7 +504,7 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 			}
 		}
 
-		res, _, err := svc.repo.FilterTasks(ctx, []string{id}, query, req.Msg.View.GroupByField, req.Msg.Pagination)
+		res, _, err := svc.repo.FilterTasks(ctx, id, query, req.Msg.View.GroupByField, req.Msg.Pagination)
 		if err != nil {
 			return nil, err
 		}
@@ -503,28 +512,22 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 		allGroups = append(allGroups, res...)
 	}
 
-	boards := make(map[string]error)
-
-	results := make([]*tasksv1.TaskGroup, 0, len(allGroups))
-	for _, grp := range allGroups {
-		err, ok := boards[grp.BoardId]
-		if !ok {
-			_, err = svc.ensureBoardPermissions(ctx, grp.BoardId, "read")
-			boards[grp.BoardId] = err
-		}
-
-		if err == nil {
-			results = append(results, grp)
-		}
+	// the use does not have permission to query at least one board
+	if !found {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you are not allowed to read the task boards"))
 	}
 
-	// TODO(ppacher): support for the tkd.common.v1.View field
-
-	return connect.NewResponse(&tasksv1.QueryViewResponse{
-		Groups:       results,
+	response := &tasksv1.QueryViewResponse{
+		Groups:       allGroups,
 		GroupByField: req.Msg.View.GroupByField,
-		Boards:       allBoards, // TODO(ppacher): filter boards
-	}), nil
+		Boards:       allBoards,
+	}
+
+	if fmp := req.Msg.GetReadMask().GetPaths(); len(fmp) > 0 {
+		fmutils.Filter(response, fmp)
+	}
+
+	return connect.NewResponse(response), nil
 }
 
 func (svc *Service) AddTaskAttachment(ctx context.Context, req *connect.Request[tasksv1.AddTaskAttachmentRequest]) (*connect.Response[tasksv1.AddTaskAttachmentResponse], error) {

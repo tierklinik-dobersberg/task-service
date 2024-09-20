@@ -910,14 +910,14 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 }
 
 // FilterTasks is like ListTasks but filters based on taskql queries.
-func (db *Repository) FilterTasks(ctx context.Context, boardIds []string, q map[taskql.Field]taskql.Query, groupBy string, pagination *commonv1.Pagination) ([]*tasksv1.TaskGroup, int, error) {
+func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[taskql.Field]taskql.Query, groupBy string, pagination *commonv1.Pagination) ([]*tasksv1.TaskGroup, int, error) {
 	filter := filterFromTaskQlQuery(q)
 
-	if len(boardIds) > 0 {
-		filter["boardId"] = bson.M{
-			"$in": boardIds,
-		}
+	if filter == nil {
+		filter = bson.M{}
 	}
+
+	filter["boardId"] = boardId
 
 	paginationPipeline := mongo.Pipeline{}
 
@@ -1026,17 +1026,26 @@ func (db *Repository) FilterTasks(ctx context.Context, boardIds []string, q map[
 		slog.Warn("received unexpected result count for aggregation state", "count", len(result))
 	}
 
-	pbResult := make([]*tasksv1.TaskGroup, len(result[0].Data))
-	for idx, r := range result[0].Data {
+	pbResult := make([]*tasksv1.TaskGroup, 0, len(result[0].Data))
+	for _, r := range result[0].Data {
+		grpValue, err := anyToAnyPb(r.GroupValue)
+
+		if err != nil {
+			slog.Error("failed to convert group value", "error", err)
+			continue
+		}
+
 		grp := &tasksv1.TaskGroup{
-			Tasks: make([]*tasksv1.Task, len(r.Group)),
+			GroupValue: grpValue,
+			BoardId:    boardId,
+			Tasks:      make([]*tasksv1.Task, len(r.Group)),
 		}
 
 		for idx, t := range r.Group {
 			grp.Tasks[idx] = t.ToProto()
 		}
 
-		pbResult[idx] = grp
+		pbResult = append(pbResult, grp)
 	}
 
 	var count int
