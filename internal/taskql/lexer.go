@@ -110,6 +110,7 @@ L:
 
 	if cur == nil {
 		state = TokenStart
+		result = append(result, &Condition{})
 	}
 
 	return result, state, nil

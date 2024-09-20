@@ -57,13 +57,13 @@ func (l *Language) Process(input string) error {
 	l.lastToken = lastToken
 
 	for _, c := range conditions {
-		// construct the field name and validate it
+		// skip empty conditions
+		if c.FieldName == "" && c.Value == "" {
+			continue
+		}
+
+		// construct the field name, validation happens at a later stage
 		fn := Field(c.FieldName)
-		/*
-			if !fn.IsValid() {
-				return fmt.Errorf("invalid or unsupported field name %q", fn)
-			}
-		*/
 
 		// ensure there's already a query entry for the field name
 		query, ok := l.queries[fn]
