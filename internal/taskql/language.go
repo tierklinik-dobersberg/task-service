@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/bufbuild/connect-go"
@@ -58,9 +59,11 @@ func (l *Language) Process(input string) error {
 	for _, c := range conditions {
 		// construct the field name and validate it
 		fn := Field(c.FieldName)
-		if !fn.IsValid() {
-			return fmt.Errorf("invalid or unsupported field name %q", fn)
-		}
+		/*
+			if !fn.IsValid() {
+				return fmt.Errorf("invalid or unsupported field name %q", fn)
+			}
+		*/
 
 		// ensure there's already a query entry for the field name
 		query, ok := l.queries[fn]
@@ -89,6 +92,12 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 
 	if copy == nil {
 		return nil, nil
+	}
+
+	for fn := range copy {
+		if !fn.IsValid() {
+			return nil, fmt.Errorf("unsupported field name %q", fn)
+		}
 	}
 
 	// resolve all user ids if there are some
@@ -149,8 +158,9 @@ func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, erro
 		return TokenStart, nil, fmt.Errorf("expected next token cannot be retrieved without a specified board")
 	}
 
+	// there isn't even a single token
 	if len(l.conditions) == 0 {
-		values, err := l.getPossibleValues(ctx, l.lastToken, nil)
+		values, err := l.getPossibleValues(ctx, nil)
 		if err != nil {
 			return TokenStart, nil, err
 		}
@@ -160,7 +170,7 @@ func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, erro
 
 	last := l.conditions[len(l.conditions)-1]
 
-	values, err := l.getPossibleValues(ctx, l.lastToken, last)
+	values, err := l.getPossibleValues(ctx, last)
 	if err != nil {
 		return TokenStart, nil, err
 	}
@@ -168,17 +178,28 @@ func (l *Language) ExpectedNextToken(ctx context.Context) (Token, []string, erro
 	return l.lastToken, values, nil
 }
 
-func (l *Language) getPossibleValues(ctx context.Context, token Token, last *Condition) ([]string, error) {
-	switch token {
-	case TokenStart, TokenField, TokenSeparator:
-		return []string{
-			string(FieldAssignee),
-			string(FieldCompleted),
-			string(FieldStatus),
-			string(FieldTag),
-			string(FieldPriority),
-			string(FieldCreator),
-		}, nil
+func (l *Language) getPossibleValues(ctx context.Context, last *Condition) ([]string, error) {
+	switch {
+	case last == nil:
+		result := make([]string, len(allFields))
+		for idx, fn := range allFields {
+			result[idx] = string(fn)
+		}
+
+		return result, nil
+
+	case !Field(last.FieldName).IsValid():
+		result := make([]string, 0)
+		for _, fn := range allFields {
+			if strings.HasPrefix(
+				string(fn),
+				last.FieldName,
+			) {
+				result = append(result, string(fn))
+			}
+		}
+
+		return result, nil
 
 	default:
 		return l.getFieldValues(ctx, Field(last.FieldName))
