@@ -51,18 +51,12 @@ func (l *Language) String() string {
 
 	for idx, value := range l.conditions {
 		if idx == len(l.conditions)-1 {
-			// skip the last empty condition returned by the lexer
-			if value.FieldName == "" && value.Value == "" {
-				break
+			fn := Field(value.FieldName)
+			if fn.IsValid() && value.Value != "" {
+				strs = append(strs, value.String())
 			}
 
-			fn := Field(value.FieldName)
-			if fn.IsValid() {
-				strs = append(strs, value.FieldName + ":" + "\"" + value.Value)
-				break
-			} else {
-				strs = append(strs, value.FieldName)
-			}
+			break
 		}
 
 		strs = append(strs, value.String())
