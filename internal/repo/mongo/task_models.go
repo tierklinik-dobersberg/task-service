@@ -57,6 +57,31 @@ type (
 	}
 )
 
+func taskTagFromFieldName(fn string) string {
+	f, ok := map[string]string{
+		"board_id": "boardID",
+		"title": "title",
+		"description": "description",
+		"creator_id": "creator",
+		"assignee_id": "assignee",
+		"tags": "tags",
+		"status": "status",
+		"assigned_by": "assignedBy",
+		"due_time": "dueTime",
+		"create_time": "createTime",
+		"update_time": "updateTime",
+		"assign_time": "assignTime",
+		"complete_time": "completeTime",
+		"priority": "priority",
+	}[fn];
+
+	if ok {
+		return f
+	}
+
+	return ""
+}
+
 func (at *Attachment) ToProto() *tasksv1.Attachment {
 	if at == nil {
 		return nil

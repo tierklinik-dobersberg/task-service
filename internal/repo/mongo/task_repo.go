@@ -962,7 +962,11 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 
 	var groupByFieldName any = primitive.Null{}
 	if groupBy != "" {
-		groupByFieldName = boardTagFromProtoFieldName(groupBy)
+		groupByFieldName = taskTagFromFieldName(groupBy)
+
+		if groupByFieldName == "" {
+			return nil, 0, fmt.Errorf("invalid or unsupported group_by value %q", groupBy)
+		}
 	}
 
 	paginationPipeline = append(paginationPipeline, bson.D{
