@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/task-service/internal/repo"
@@ -604,10 +605,6 @@ func (db *Repository) AddView(ctx context.Context, boardId string, view *tasksv1
 
 	model := viewFromProto(view)
 
-	filter := bson.M{
-		"_id": oid,
-	}
-
 	wc := writeconcern.Majority()
 	txnOptions := options.Transaction().SetWriteConcern(wc)
 
@@ -619,7 +616,10 @@ func (db *Repository) AddView(ctx context.Context, boardId string, view *tasksv1
 	defer session.EndSession(ctx)
 
 	result, err := session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
-		replaceResult, err := db.boards.UpdateOne(ctx, filter, bson.M{
+		replaceResult, err := db.boards.UpdateOne(ctx, bson.M{
+			"_id":   oid,
+			"views": bson.M{"$exists": true},
+		}, bson.M{
 			"$set": bson.M{
 				"views.$[filter]": model,
 			},
@@ -631,6 +631,8 @@ func (db *Repository) AddView(ctx context.Context, boardId string, view *tasksv1
 			},
 		}))
 		if err != nil {
+			slog.Error("failed to perform replace operation", "error", err, "type", fmt.Sprintf("%T (%v)", err, err))
+
 			return nil, fmt.Errorf("failed to perform replace operation: %w", err)
 		}
 
@@ -641,7 +643,7 @@ func (db *Repository) AddView(ctx context.Context, boardId string, view *tasksv1
 				},
 			}
 
-			res, err := db.boards.UpdateOne(ctx, filter, update)
+			res, err := db.boards.UpdateOne(ctx, bson.M{"_id": oid}, update)
 			if err != nil {
 				return nil, fmt.Errorf("failed to perform update operation: %w", err)
 			}
