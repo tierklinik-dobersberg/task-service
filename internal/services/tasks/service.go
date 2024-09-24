@@ -476,6 +476,15 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 
 	var allGroups []*tasksv1.TaskGroup
 
+	// copy sort information from the View to Pagination.
+	if req.Msg.View.Sort != nil {
+		if req.Msg.Pagination == nil {
+			req.Msg.Pagination = &commonv1.Pagination{}
+		}
+
+		req.Msg.Pagination.SortBy = []*commonv1.Sort{req.Msg.View.Sort}
+	}
+
 	found := false
 	for _, id := range boardIds {
 		board, ok := boardMap[id]
@@ -505,14 +514,6 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 			if err != nil {
 				return nil, err
 			}
-		}
-
-		if req.Msg.View.Sort != nil {
-			if req.Msg.Pagination == nil {
-				req.Msg.Pagination = &commonv1.Pagination{}
-			}
-
-			req.Msg.Pagination.SortBy = []*commonv1.Sort{req.Msg.View.Sort}
 		}
 
 		res, _, err := svc.repo.FilterTasks(ctx, id, query, req.Msg.View.GroupByField, req.Msg.Pagination)
