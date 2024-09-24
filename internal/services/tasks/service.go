@@ -14,6 +14,7 @@ import (
 	"github.com/bufbuild/connect-go"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/mennanov/fmutils"
+	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
@@ -504,6 +505,14 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 			if err != nil {
 				return nil, err
 			}
+		}
+
+		if req.Msg.View.Sort != nil {
+			if req.Msg.Pagination == nil {
+				req.Msg.Pagination = &commonv1.Pagination{}
+			}
+
+			req.Msg.Pagination.SortBy = []*commonv1.Sort{req.Msg.View.Sort}
 		}
 
 		res, _, err := svc.repo.FilterTasks(ctx, id, query, req.Msg.View.GroupByField, req.Msg.Pagination)
