@@ -959,8 +959,6 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 	}
 
 	var groupByFieldName any = primitive.Null{}
-	groupSort := bson.D{}
-
 	if groupBy != "" {
 		name := taskTagFromFieldName(groupBy)
 
@@ -970,7 +968,17 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 
 		groupByFieldName = name
 
-		groupSort = append(groupSort, bson.E{Key: name, Value: 1})
+		pipeline = append(pipeline, bson.D{
+			{
+				Key: "$sort",
+				Value: bson.D{
+					bson.E{
+						Key:   name,
+						Value: 1,
+					},
+				},
+			},
+		})
 	}
 
 	paginationPipeline = append(paginationPipeline, bson.D{
@@ -984,15 +992,6 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 			},
 		},
 	})
-
-	if len(groupSort) > 0 {
-		paginationPipeline = append(paginationPipeline, bson.D{
-			{
-				Key:   "$sort",
-				Value: groupSort,
-			},
-		})
-	}
 
 	pipeline = append(pipeline, bson.D{
 		{
