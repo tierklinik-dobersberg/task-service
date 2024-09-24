@@ -968,17 +968,6 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 
 		groupByFieldName = name
 
-		pipeline = append(pipeline, bson.D{
-			{
-				Key: "$sort",
-				Value: bson.D{
-					bson.E{
-						Key:   name,
-						Value: 1,
-					},
-				},
-			},
-		})
 	}
 
 	paginationPipeline = append(paginationPipeline, bson.D{
@@ -988,6 +977,18 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 				"_id": fmt.Sprintf("$%s", groupByFieldName),
 				"group": bson.M{
 					"$push": "$$ROOT",
+				},
+			},
+		},
+	})
+
+	paginationPipeline = append(paginationPipeline, bson.D{
+		{
+			Key: "$sort",
+			Value: bson.D{
+				{
+					Key:   "_id",
+					Value: -1,
 				},
 			},
 		},
