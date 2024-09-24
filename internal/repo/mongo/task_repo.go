@@ -969,7 +969,7 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		{
 			Key: "$group",
 			Value: bson.M{
-				"_id": groupByFieldName,
+				"_id": fmt.Sprintf("$%s", groupByFieldName),
 				"group": bson.M{
 					"$push": "$$ROOT",
 				},

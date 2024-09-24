@@ -192,12 +192,18 @@ func (l *Language) ExpectedNextToken(ctx context.Context) (Token, string, []stri
 
 	last := l.conditions[len(l.conditions)-1]
 
-	values, err := l.getPossibleValues(ctx, last)
-	if err != nil {
-		return TokenStart, last.FieldName, nil, err
+	fn := last.FieldName
+
+	if fn != "" && last.Not {
+		fn = "-" + last.FieldName
 	}
 
-	return l.lastToken, last.FieldName, values, nil
+	values, err := l.getPossibleValues(ctx, last)
+	if err != nil {
+		return TokenStart, fn, nil, err
+	}
+
+	return l.lastToken, fn, values, nil
 }
 
 func (l *Language) getPossibleValues(ctx context.Context, last *Condition) ([]string, error) {
