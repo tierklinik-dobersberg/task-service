@@ -986,7 +986,12 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 	})
 
 	if len(groupSort) > 0 {
-		paginationPipeline = append(paginationPipeline, groupSort)
+		paginationPipeline = append(paginationPipeline, bson.D{
+			{
+				Key:   "$sort",
+				Value: groupSort,
+			},
+		})
 	}
 
 	pipeline = append(pipeline, bson.D{
