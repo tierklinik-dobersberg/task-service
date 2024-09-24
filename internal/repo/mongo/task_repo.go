@@ -921,8 +921,9 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 
 	paginationPipeline := mongo.Pipeline{}
 
-	if pagination != nil {
+	sortPipeline := mongo.Pipeline{}
 
+	if pagination != nil {
 		if len(pagination.SortBy) > 0 {
 			sort := bson.D{}
 			for _, field := range pagination.SortBy {
@@ -934,11 +935,10 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 					dir = -1
 				}
 
-				// FIXME(ppacher): convert from proto field-name to mongoDB document key
-				sort = append(sort, bson.E{Key: field.FieldName, Value: dir})
+				sort = append(sort, bson.E{Key: taskTagFromFieldName(field.FieldName), Value: dir})
 			}
 
-			paginationPipeline = append(paginationPipeline, bson.D{
+			sortPipeline = append(sortPipeline, bson.D{
 				{Key: "$sort", Value: sort},
 			})
 		}
@@ -980,6 +980,10 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 			},
 		},
 	})
+
+	if len(sortPipeline) > 0 {
+		pipeline = append(pipeline, sortPipeline...)
+	}
 
 	pipeline = append(pipeline, bson.D{
 		{
