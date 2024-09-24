@@ -921,8 +921,6 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 
 	paginationPipeline := mongo.Pipeline{}
 
-	sortPipeline := mongo.Pipeline{}
-
 	if pagination != nil {
 		if len(pagination.SortBy) > 0 {
 			sort := bson.D{}
@@ -938,7 +936,7 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 				sort = append(sort, bson.E{Key: taskTagFromFieldName(field.FieldName), Value: dir})
 			}
 
-			sortPipeline = append(sortPipeline, bson.D{
+			paginationPipeline = append(paginationPipeline, bson.D{
 				{Key: "$sort", Value: sort},
 			})
 		}
@@ -961,12 +959,18 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 	}
 
 	var groupByFieldName any = primitive.Null{}
+	groupSort := bson.D{}
+
 	if groupBy != "" {
-		groupByFieldName = taskTagFromFieldName(groupBy)
+		name := taskTagFromFieldName(groupBy)
 
 		if groupByFieldName == "" {
 			return nil, 0, fmt.Errorf("invalid or unsupported group_by value %q", groupBy)
 		}
+
+		groupByFieldName = name
+
+		groupSort = append(groupSort, bson.E{Key: name, Value: 1})
 	}
 
 	paginationPipeline = append(paginationPipeline, bson.D{
@@ -981,8 +985,8 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		},
 	})
 
-	if len(sortPipeline) > 0 {
-		pipeline = append(pipeline, sortPipeline...)
+	if len(groupSort) > 0 {
+		paginationPipeline = append(paginationPipeline, groupSort)
 	}
 
 	pipeline = append(pipeline, bson.D{
