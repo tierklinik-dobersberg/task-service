@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bufbuild/connect-go"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
@@ -157,16 +158,66 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 		replace(copy[FieldAssignee].NotIn)
 	}
 
+	// resolve priority values
 	priorityMap := data.IndexSlice(l.board.AllowedTaskPriorities, func(p *tasksv1.TaskPriority) string {
 		return p.Name
 	})
-
-	// resolve priority values
 	for idx, v := range copy[FieldPriority].In {
 		p, ok := priorityMap[v]
 		if ok {
 			copy[FieldPriority].In[idx] = strconv.Itoa(int(p.Priority))
 		}
+	}
+
+	// resolve datetime fields
+	today := time.Now().Local()
+	resolveTimes := func(list []string) error {
+		for idx, val := range list {
+			var t time.Time
+			switch val {
+			case "yesterday":
+				t = time.Date(today.Year(), today.Month(), today.Day()-1, 0, 0, 0, 0, today.Location())
+			case "today":
+				t = today
+			case "tomorrow":
+				t = time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, today.Location())
+
+			default:
+				var err error
+				t, err = time.Parse(time.RFC3339, val)
+				if err != nil {
+					t, err = time.ParseInLocation(time.DateTime, val, time.Local)
+					if err != nil {
+						return fmt.Errorf("invalid time value %q: %w", val, err)
+					}
+				}
+			}
+
+			list[idx] = t.Format(time.RFC3339)
+		}
+
+		return nil
+	}
+
+	if err := resolveTimes(copy[FieldDueAt].In); err != nil {
+		return nil, fmt.Errorf("due_at: %w", err)
+	}
+	if err := resolveTimes(copy[FieldDueAt].NotIn); err != nil {
+		return nil, fmt.Errorf("-due_at: %w", err)
+	}
+
+	if err := resolveTimes(copy[FieldDueAfter].In); err != nil {
+		return nil, fmt.Errorf("due_at: %w", err)
+	}
+	if err := resolveTimes(copy[FieldDueAfter].NotIn); err != nil {
+		return nil, fmt.Errorf("-due_at: %w", err)
+	}
+
+	if err := resolveTimes(copy[FieldDueBefore].In); err != nil {
+		return nil, fmt.Errorf("due_at: %w", err)
+	}
+	if err := resolveTimes(copy[FieldDueBefore].NotIn); err != nil {
+		return nil, fmt.Errorf("-due_at: %w", err)
 	}
 
 	return copy, nil
@@ -300,6 +351,9 @@ func (l *Language) getFieldValues(ctx context.Context, fieldName Field) ([]strin
 		return mapValues(l.board.AllowedTaskTags, func(e *tasksv1.TaskTag) string {
 			return e.Tag
 		}), nil
+
+	case FieldDueAfter, FieldDueAt, FieldDueBefore:
+		return []string{"today", "tomorrow", "yesterday"}, nil
 	}
 
 	return nil, fmt.Errorf("unsupported or invalid field name: %q", fieldName)

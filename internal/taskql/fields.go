@@ -9,6 +9,9 @@ const (
 	FieldCompleted = Field("completed")
 	FieldCreator   = Field("creator")
 	FieldPriority  = Field("priority")
+	FieldDueBefore = Field("due_before")
+	FieldDueAfter  = Field("due_after")
+	FieldDueAt     = Field("due_at")
 )
 
 var allFields = []Field{
@@ -18,6 +21,9 @@ var allFields = []Field{
 	FieldCompleted,
 	FieldCreator,
 	FieldPriority,
+	FieldDueBefore,
+	FieldDueAfter,
+	FieldDueAt,
 }
 
 func (f Field) IsValid() bool {

@@ -910,7 +910,7 @@ func (db *Repository) CreateTaskComment(ctx context.Context, taskId, boardId str
 }
 
 // FilterTasks is like ListTasks but filters based on taskql queries.
-func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[taskql.Field]taskql.Query, groupBy string, pagination *commonv1.Pagination) ([]*tasksv1.TaskGroup, int, error) {
+func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[taskql.Field]taskql.Query, groupBy string, groupByDesc bool, pagination *commonv1.Pagination) ([]*tasksv1.TaskGroup, int, error) {
 	filter := filterFromTaskQlQuery(q)
 
 	if filter == nil {
@@ -982,13 +982,17 @@ func (db *Repository) FilterTasks(ctx context.Context, boardId string, q map[tas
 		},
 	})
 
+	val := 1
+	if groupByDesc {
+		val = -1
+	}
 	paginationPipeline = append(paginationPipeline, bson.D{
 		{
 			Key: "$sort",
 			Value: bson.D{
 				{
 					Key:   "_id",
-					Value: -1,
+					Value: val,
 				},
 			},
 		},
@@ -1214,6 +1218,128 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 
 		case taskql.FieldPriority:
 			add("priority", query)
+
+		case taskql.FieldDueAfter:
+			ors := bson.D{}
+
+			for _, v := range query.In {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				ors = append(ors, bson.E{
+					Key:   "$gte",
+					Value: t,
+				})
+			}
+			for _, v := range query.NotIn {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				ors = append(ors, bson.E{
+					Key:   "$lte",
+					Value: t,
+				})
+			}
+
+			if len(ors) == 1 {
+				result["dueTime"] = ors[0]
+			} else {
+				result["dueTime"] = bson.M{
+					"$or": ors,
+				}
+			}
+
+		case taskql.FieldDueBefore:
+			ors := bson.D{}
+
+			for _, v := range query.In {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				ors = append(ors, bson.E{
+					Key:   "$lte",
+					Value: t,
+				})
+			}
+			for _, v := range query.NotIn {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				ors = append(ors, bson.E{
+					Key:   "$gte",
+					Value: t,
+				})
+			}
+
+			if len(ors) == 1 {
+				result["dueTime"] = ors[0]
+			} else {
+				result["dueTime"] = bson.M{
+					"$or": ors,
+				}
+			}
+
+		case taskql.FieldDueAt:
+			ors := bson.D{}
+
+			for _, v := range query.In {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+				end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location())
+
+				ors = append(ors, bson.E{
+					Key:   "$gte",
+					Value: start,
+				})
+				ors = append(ors, bson.E{
+					Key:   "$lte",
+					Value: end,
+				})
+			}
+			for _, v := range query.NotIn {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+				end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location())
+
+				ors = append(ors, bson.E{
+					Key:   "$gte",
+					Value: end,
+				})
+				ors = append(ors, bson.E{
+					Key:   "$lte",
+					Value: start,
+				})
+			}
+
+			if len(ors) == 1 {
+				result["dueTime"] = ors[0]
+			} else {
+				result["dueTime"] = bson.M{
+					"$or": ors,
+				}
+			}
 
 		case taskql.FieldCompleted:
 			var value string

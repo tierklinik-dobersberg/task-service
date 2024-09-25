@@ -44,11 +44,12 @@ type (
 	}
 
 	View struct {
-		Name      string `bson:"name"`
-		Filter    string `bson:"filter"`
-		GroupBy   string `bson:"groupBy"`
-		SortField string `bson:"sortField"`
-		SortDesc  bool   `bson:"sortDesc"`
+		Name          string `bson:"name"`
+		Filter        string `bson:"filter"`
+		GroupBy       string `bson:"groupBy"`
+		GroupSortDesc bool   `bson:"groupSortDesc"`
+		SortField     string `bson:"sortField"`
+		SortDesc      bool   `bson:"sortDesc"`
 	}
 
 	Board struct {
@@ -73,9 +74,14 @@ type (
 
 func (v View) ToProto() *tasksv1.View {
 	vpb := &tasksv1.View{
-		Name:         v.Name,
-		Filter:       v.Filter,
-		GroupByField: v.GroupBy,
+		Name:               v.Name,
+		Filter:             v.Filter,
+		GroupByField:       v.GroupBy,
+		GroupSortDirection: commonv1.SortDirection_SORT_DIRECTION_ASC,
+	}
+
+	if v.GroupSortDesc {
+		vpb.GroupSortDirection = commonv1.SortDirection_SORT_DIRECTION_DESC
 	}
 
 	if v.SortField != "" {
@@ -97,6 +103,12 @@ func viewFromProto(pb *tasksv1.View) View {
 		Name:    pb.Name,
 		Filter:  pb.Filter,
 		GroupBy: pb.GroupByField,
+	}
+
+	switch pb.GroupSortDirection {
+	case commonv1.SortDirection_SORT_DIRECTION_ASC, commonv1.SortDirection_SORT_DIRECTION_UNSPECIFIED:
+	case commonv1.SortDirection_SORT_DIRECTION_DESC:
+		v.GroupSortDesc = true
 	}
 
 	if pb.Sort != nil {

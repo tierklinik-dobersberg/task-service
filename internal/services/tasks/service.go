@@ -12,7 +12,6 @@ import (
 	"slices"
 
 	"github.com/bufbuild/connect-go"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/mennanov/fmutils"
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	idmv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1"
@@ -424,10 +423,7 @@ func (svc *Service) FilterTasks(ctx context.Context, req *connect.Request[tasksv
 		}
 	}
 
-	// Dump query for debugging purposes
-	spew.Dump(query)
-
-	res, count, err := svc.repo.FilterTasks(ctx, req.Msg.BoardId, query, "", req.Msg.Pagination)
+	res, count, err := svc.repo.FilterTasks(ctx, req.Msg.BoardId, query, "", false, req.Msg.Pagination)
 	if err != nil {
 		return nil, err
 	}
@@ -485,6 +481,11 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 		req.Msg.Pagination.SortBy = []*commonv1.Sort{req.Msg.View.Sort}
 	}
 
+	desc := false
+	if req.Msg.View.GroupSortDirection == commonv1.SortDirection_SORT_DIRECTION_DESC {
+		desc = true
+	}
+
 	found := false
 	for _, id := range boardIds {
 		board, ok := boardMap[id]
@@ -516,7 +517,7 @@ func (svc *Service) QueryView(ctx context.Context, req *connect.Request[tasksv1.
 			}
 		}
 
-		res, _, err := svc.repo.FilterTasks(ctx, id, query, req.Msg.View.GroupByField, req.Msg.Pagination)
+		res, _, err := svc.repo.FilterTasks(ctx, id, query, req.Msg.View.GroupByField, desc, req.Msg.Pagination)
 		if err != nil {
 			return nil, err
 		}
