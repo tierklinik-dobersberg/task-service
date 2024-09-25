@@ -3,6 +3,7 @@ package taskql
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strconv"
@@ -194,6 +195,8 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 			}
 
 			list[idx] = t.Local().Format(time.RFC3339)
+
+			slog.Info("parsed time filter", "time", list[idx])
 		}
 
 		return nil
@@ -207,17 +210,17 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 	}
 
 	if err := resolveTimes(copy[FieldDueAfter].In); err != nil {
-		return nil, fmt.Errorf("due_at: %w", err)
+		return nil, fmt.Errorf("due_after: %w", err)
 	}
 	if err := resolveTimes(copy[FieldDueAfter].NotIn); err != nil {
-		return nil, fmt.Errorf("-due_at: %w", err)
+		return nil, fmt.Errorf("-due_after: %w", err)
 	}
 
 	if err := resolveTimes(copy[FieldDueBefore].In); err != nil {
-		return nil, fmt.Errorf("due_at: %w", err)
+		return nil, fmt.Errorf("due_before: %w", err)
 	}
 	if err := resolveTimes(copy[FieldDueBefore].NotIn); err != nil {
-		return nil, fmt.Errorf("-due_at: %w", err)
+		return nil, fmt.Errorf("-due_before: %w", err)
 	}
 
 	return copy, nil

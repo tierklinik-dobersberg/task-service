@@ -1319,8 +1319,12 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 				// switch to local time
 				t = t.Local()
 
-				start := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
-				end := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location()))
+				slog.Info("adding due_at filter", "time", t.Format(time.RFC3339))
+
+				start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+				end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, time.Local)
+
+				slog.Info("adding due_at filter", "time", t.Format(time.RFC3339), "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
 
 				ors = append(ors, bson.M{
 					"$gte": start,
