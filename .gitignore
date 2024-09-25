@@ -4,3 +4,4 @@
 mails/node_modules
 mails/dist
 mails/build_local
+cmds/taskd/node_modules

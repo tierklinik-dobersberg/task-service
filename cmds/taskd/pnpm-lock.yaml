@@ -1,0 +1,66 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@bufbuild/protobuf':
+        specifier: ^2.1.0
+        version: 2.1.0
+      '@tierklinik-dobersberg/apis':
+        specifier: ^0.10.0
+        version: 0.10.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect-web@1.5.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0)))(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0))
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
+
+packages:
+
+  '@bufbuild/protobuf@2.1.0':
+    resolution: {integrity: sha512-+2Mx67Y3skJ4NCD/qNSdBJNWtu6x6Qr53jeNg+QcwiL6mt0wK+3jwHH2x1p7xaYH6Ve2JKOVn0OxU35WsmqI9A==}
+
+  '@connectrpc/connect-web@1.5.0':
+    resolution: {integrity: sha512-xjiiQ932Kibddaka18fGZ6yQL7xjXuLcYFYh/cU+q1WWEIrFPkZfViG/Ee6yrZbrlZkjcBuDibng+q7baTndfg==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.10.0
+      '@connectrpc/connect': 1.5.0
+
+  '@connectrpc/connect@1.5.0':
+    resolution: {integrity: sha512-1gGg0M6c2Y3lnr5itis9dNj9r8hbOIuBMqoGSbUy7L7Vjw4MAttjJzJfj9HCDgytGCJkGanYEYI6MQVDijdVQw==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.10.0
+
+  '@tierklinik-dobersberg/apis@0.10.0':
+    resolution: {integrity: sha512-KY7k8g5bk/gWWanZt023nDT3sbSCFRDYaIaDXbFb2kWk8Huf9GOOaht80oBNQ3wHKRLm0TY3cpglp210lSVIfw==, tarball: https://npm.pkg.github.com/download/@tierklinik-dobersberg/apis/0.10.0/3be5ea1dad11c7b4aa0b002c2bd8da00beed2427}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.9.0
+      '@connectrpc/connect': ^1.4.0
+      '@connectrpc/connect-web': ^1.4.0
+
+  date-fns@4.1.0:
+    resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
+
+snapshots:
+
+  '@bufbuild/protobuf@2.1.0': {}
+
+  '@connectrpc/connect-web@1.5.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0))':
+    dependencies:
+      '@bufbuild/protobuf': 2.1.0
+      '@connectrpc/connect': 1.5.0(@bufbuild/protobuf@2.1.0)
+
+  '@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0)':
+    dependencies:
+      '@bufbuild/protobuf': 2.1.0
+
+  '@tierklinik-dobersberg/apis@0.10.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect-web@1.5.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0)))(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0))':
+    dependencies:
+      '@bufbuild/protobuf': 2.1.0
+      '@connectrpc/connect': 1.5.0(@bufbuild/protobuf@2.1.0)
+      '@connectrpc/connect-web': 1.5.0(@bufbuild/protobuf@2.1.0)(@connectrpc/connect@1.5.0(@bufbuild/protobuf@2.1.0))
+
+  date-fns@4.1.0: {}

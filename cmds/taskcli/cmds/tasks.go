@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"os"
 	"strings"
 	"time"
 
@@ -8,8 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
+	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
+	"github.com/tierklinik-dobersberg/task-service/internal/automation"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -106,6 +109,7 @@ func TasksCommand(root *cli.Root) *cobra.Command {
 		DeleteTaskCommand(root),
 		CompleteTaskCommand(root),
 		AssignTaskCommand(root),
+		EvalAutomation(root),
 	)
 
 	return cmd
@@ -162,6 +166,44 @@ func CreateTaskCommand(root *cli.Root) *cobra.Command {
 		f.StringSliceVar(&req.Tags, "tag", nil, "")
 		f.BoolVar(&noResolve, "no-resolve-ids", false, "Do not resolve user ids")
 	}
+
+	return cmd
+}
+
+func EvalAutomation(root *cli.Root) *cobra.Command {
+	var (
+		n string
+	)
+
+	cmd := &cobra.Command{
+		Use:  "eval path/to/file",
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			content, err := os.ReadFile(args[0])
+			if err != nil {
+				logrus.Fatalf("failed to read file: %s", err)
+			}
+
+			engine, err := automation.New(string(content), automation.Providers{
+				TaskClient:   root.Tasks(),
+				UserClient:   root.Users(),
+				RoleClient:   root.Roles(),
+				NotifyClient: idmv1connect.NewNotifyServiceClient(root.HttpClient, root.Config().BaseURLS.Idm),
+				FS:           os.DirFS(n),
+			})
+			if err != nil {
+				logrus.Fatalf("failed to prepare automation engine: %s", err)
+			}
+
+			if err := engine.RunSchedule(); err != nil {
+				logrus.Fatalf("failed to run schedule: %s", err)
+			}
+
+			engine.Wait()
+		},
+	}
+
+	cmd.Flags().StringVarP(&n, "node-modules", "n", "", "")
 
 	return cmd
 }

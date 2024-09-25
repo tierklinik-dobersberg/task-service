@@ -6,7 +6,11 @@ require (
 	github.com/bufbuild/connect-go v1.10.0
 	github.com/bufbuild/protovalidate-go v0.7.0
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dop251/goja v0.0.0-20240919115326-6c7d1df7ff05
+	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
+	github.com/elazarl/goproxy v0.0.0-20240909085733-6741dbfc16a1
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/olebedev/gojax v0.0.0-20170318114811-bb153be84336
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
@@ -14,6 +18,13 @@ require (
 	github.com/yuin/goldmark v1.7.4
 	go.mongodb.org/mongo-driver v1.17.0
 	google.golang.org/protobuf v1.34.2
+)
+
+require (
+	github.com/dlclark/regexp2 v1.11.4 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
+	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 )
 
 require (

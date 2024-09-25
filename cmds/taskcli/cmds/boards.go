@@ -1,13 +1,9 @@
 package cmds
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/bufbuild/connect-go"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	commonv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/common/v1"
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/cli"
 )
@@ -42,8 +38,6 @@ func GetBoardsCommand(root *cli.Root) *cobra.Command {
 	cmd.AddCommand(
 		CreateBoardCommand(root),
 		DeleteBoardCommand(root),
-		AddNotificationCommand(root),
-		DeleteNotificationCommand(root),
 	)
 
 	return cmd
@@ -126,132 +120,4 @@ func DeleteBoardCommand(root *cli.Root) *cobra.Command {
 	}
 
 	return cmd
-}
-
-func AddNotificationCommand(root *cli.Root) *cobra.Command {
-	var (
-		req              = &tasksv1.BoardNotification{}
-		sendTimes        []string
-		eventTypes       []string
-		notificationType string
-		noResolve        bool
-	)
-
-	cmd := &cobra.Command{
-		Use:  "add-notification [board-id]",
-		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			for _, t := range sendTimes {
-				parts := strings.Split(t, ":")
-				if len(parts) != 2 {
-					logrus.Fatalf("invalid value %q for --send-at", t)
-				}
-
-				hour, err := strconv.ParseInt(strings.TrimPrefix(parts[0], "0"), 10, 0)
-				if err != nil {
-					logrus.Fatalf("invalid value %q for --send-at", t)
-				}
-
-				min, err := strconv.ParseInt(strings.TrimPrefix(parts[1], "0"), 10, 0)
-				if err != nil {
-					logrus.Fatalf("invalid value %q for --send-at", t)
-				}
-
-				req.SendTimes = append(req.SendTimes, &commonv1.DayTime{
-					Hour:   int32(hour),
-					Minute: int32(min),
-				})
-			}
-
-			switch notificationType {
-			case "sms":
-				req.NotificationType = tasksv1.NotificationType_NOTIFICATION_TYPE_SMS
-			case "mail", "email":
-				req.NotificationType = tasksv1.NotificationType_NOTIFICATION_TYPE_MAIL
-			case "webpush", "push":
-				req.NotificationType = tasksv1.NotificationType_NOTIFICATION_TYPE_WEBPUSH
-
-			default:
-				logrus.Fatalf("invalid notification type %q", notificationType)
-			}
-
-			for _, evt := range eventTypes {
-				var e tasksv1.EventType
-
-				switch evt {
-				case "create":
-					e = tasksv1.EventType_EVENT_TYPE_CREATED
-				case "change":
-					e = tasksv1.EventType_EVENT_TYPE_CHANGED
-				case "update":
-					e = tasksv1.EventType_EVENT_TYPE_UPDATED
-				case "assign":
-					e = tasksv1.EventType_EVENT_TYPE_ASSIGNEE_CHANGED
-				case "completed":
-					e = tasksv1.EventType_EVENT_TYPE_COMPLETED
-				case "all":
-					e = tasksv1.EventType_EVENT_TYPE_UNSPECIFIED
-
-				default:
-					logrus.Fatalf("invalid value for --event %q", evt)
-				}
-
-				req.EventTypes = append(req.EventTypes, e)
-			}
-
-			if !noResolve {
-				req.RecipientRoleIds = root.MustResolveRoleIds(req.RecipientRoleIds)
-				req.RecipientUserIds = root.MustResolveUserIds(req.RecipientUserIds)
-			}
-
-			cli := root.Boards()
-
-			res, err := cli.SaveNotification(root.Context(), connect.NewRequest(&tasksv1.SaveNotificationRequest{
-				BoardId:      args[0],
-				Notification: req,
-			}))
-
-			if err != nil {
-				logrus.Fatal(err)
-			}
-
-			root.Print(res.Msg)
-		},
-	}
-
-	f := cmd.Flags()
-	{
-		f.StringVar(&req.Name, "name", "", "The name for the new notification")
-		f.StringVar(&req.SubjectTemplate, "subject", "", "The subject template")
-		f.StringVar(&req.MessageTemplate, "message", "", "The message template")
-		f.StringSliceVar(&req.RecipientRoleIds, "to-role", nil, "A list of recipient roles")
-		f.StringSliceVar(&req.RecipientUserIds, "to-user", nil, "A list of recipient users")
-		f.StringSliceVar(&sendTimes, "send-at", nil, "A list of time-of-day at which to send notifications")
-		f.StringSliceVar(&eventTypes, "event", nil, "A list of event type to send notifications for")
-		f.StringVar(&notificationType, "type", "sms", "Which notification type to use: sms, mail or webpush")
-		f.BoolVar(&noResolve, "no-resolve-ids", false, "Do not try to resolve role and user ids")
-	}
-
-	return cmd
-}
-
-func DeleteNotificationCommand(root *cli.Root) *cobra.Command {
-	return &cobra.Command{
-		Use:  "delete-notification [board-id] [notification-name]",
-		Args: cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
-			cli := root.Boards()
-
-			res, err := cli.DeleteNotification(root.Context(), connect.NewRequest(&tasksv1.DeleteNotificationRequest{
-				BoardId:          args[0],
-				NotificationName: args[1],
-			}))
-
-			if err != nil {
-				logrus.Fatal(err)
-			}
-
-			root.Print(res.Msg)
-		},
-	}
 }
