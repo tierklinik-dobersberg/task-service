@@ -27,7 +27,7 @@ COPY --from=mailbuild /app/mails/dist /go/src/app/cmds/taskd/mails
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -v -ldflags "-s -w -linkmode external -extldflags -static" -o /go/bin/taskd ./cmds/taskd
 
 # Build the final image
-FROM gcr.io/distroless/static
+FROM gcr.io/distroless/base
 
 COPY --from=gobuild /go/bin/taskd /go/bin/taskd
 EXPOSE 8080
