@@ -1173,6 +1173,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 
 	resultIn := map[string]bson.A{}
 	resultNotIn := map[string]bson.A{}
+	resultOrs := bson.D{}
 
 	add := func(n string, q taskql.Query) {
 		for _, v := range q.NotIn {
@@ -1250,8 +1251,11 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 			if len(ors) == 1 {
 				result["dueTime"] = ors[0]
 			} else {
-				result["dueTime"] = bson.M{
-					"$or": ors,
+				for _, o := range ors {
+					resultOrs = append(resultOrs, bson.E{
+						Key:   "dueTime",
+						Value: o,
+					})
 				}
 			}
 
@@ -1286,8 +1290,11 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 			if len(ors) == 1 {
 				result["dueTime"] = ors[0]
 			} else {
-				result["dueTime"] = bson.M{
-					"$or": ors,
+				for _, o := range ors {
+					resultOrs = append(resultOrs, bson.E{
+						Key:   "dueTime",
+						Value: o,
+					})
 				}
 			}
 
@@ -1336,8 +1343,11 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 			if len(ors) == 1 {
 				result["dueTime"] = ors[0]
 			} else {
-				result["dueTime"] = bson.M{
-					"$or": ors,
+				for _, o := range ors {
+					resultOrs = append(resultOrs, bson.E{
+						Key:   "dueTime",
+						Value: o,
+					})
 				}
 			}
 
@@ -1374,6 +1384,10 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 	}
 	for key := range resultNotIn {
 		keys[key] = struct{}{}
+	}
+
+	if len(resultOrs) > 0 {
+		result["$or"] = resultOrs
 	}
 
 	for key := range keys {
