@@ -128,6 +128,12 @@ func (svc *Common) SendNotification(board *tasksv1.Board, task *tasksv1.Task, co
 
 	cli := idmv1connect.NewNotifyServiceClient(cli.NewInsecureHttp2Client(), svc.Config.IdmURL)
 	for _, sub := range subscriptions {
+
+		// Do not send notification updates to the user that performed that action
+		if sub.UserId == senderId {
+			continue
+		}
+
 		res, err := cli.SendNotification(context.Background(), connect.NewRequest(&idmv1.SendNotificationRequest{
 			SenderUserId: senderId,
 			TargetUsers:  []string{sub.UserId},

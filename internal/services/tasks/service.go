@@ -49,8 +49,8 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 	}
 
 	var id string
-	if user := auth.From(ctx); user != nil {
-		id = user.ID
+	if remoteUser != nil {
+		id = remoteUser.ID
 	}
 
 	r := req.Msg
@@ -132,15 +132,15 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		EventType: tasksv1.EventType_EVENT_TYPE_CREATED,
 	})
 
-	if user := auth.From(ctx); svc.Config.IdmURL != "" && user != nil {
+	if svc.Config.IdmURL != "" && remoteUser != nil {
 		go func() {
-			name := user.DisplayName
+			name := remoteUser.DisplayName
 			if name == "" {
-				name = user.Username
+				name = remoteUser.Username
 			}
 
 			subj := fmt.Sprintf("%s: %s hat eine neue Aufgabe %q erstellt", board.DisplayName, name, model.Title)
-			svc.SendNotification(board, model, nil, subj, user.ID, "creation-notification.html")
+			svc.SendNotification(board, model, nil, subj, remoteUser.ID, "creation-notification.html")
 		}()
 	}
 
