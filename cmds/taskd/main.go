@@ -49,16 +49,24 @@ var serverContextKey = struct{ S string }{S: "serverContextKey"}
 func main() {
 	ctx := context.Background()
 
+	slog.Info("task service starting")
+
 	cfg, err := config.LoadConfig(ctx)
 	if err != nil {
-		logrus.Fatalf("failed to load config: %s", err)
+		slog.Error("failed to load configuration", "error", err)
+
+		os.Exit(1)
 	}
+
+	slog.Info("configuration loaded successfully")
 
 	roleServiceClient := idmv1connect.NewRoleServiceClient(http.DefaultClient, cfg.IdmURL)
 
 	protoValidator, err := protovalidate.New()
 	if err != nil {
-		logrus.Fatalf("failed to prepare protovalidator: %s", err)
+		slog.Error("failed to prepare protovalidator", "error", err)
+
+		os.Exit(1)
 	}
 
 	authInterceptor := auth.NewAuthAnnotationInterceptor(
