@@ -1230,9 +1230,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				ors = append(ors, bson.E{
-					Key:   "$gte",
-					Value: t,
+				ors = append(ors, bson.M{
+					"$gte": t,
 				})
 			}
 			for _, v := range query.NotIn {
@@ -1242,9 +1241,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				ors = append(ors, bson.E{
-					Key:   "$lte",
-					Value: t,
+				ors = append(ors, bson.M{
+					"$lte": t,
 				})
 			}
 
@@ -1260,7 +1258,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 			}
 
 		case taskql.FieldDueBefore:
-			ors := bson.D{}
+			ors := bson.A{}
 
 			for _, v := range query.In {
 				t, err := time.Parse(time.RFC3339, v)
@@ -1269,9 +1267,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				ors = append(ors, bson.E{
-					Key:   "$lte",
-					Value: t,
+				ors = append(ors, bson.M{
+					"$lte": t,
 				})
 			}
 			for _, v := range query.NotIn {
@@ -1281,9 +1278,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				ors = append(ors, bson.E{
-					Key:   "$gte",
-					Value: t,
+				ors = append(ors, bson.M{
+					"$gte": t,
 				})
 			}
 
@@ -1308,8 +1304,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-				end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location())
+				start := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
+				end := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location()))
 
 				ors = append(ors, bson.M{
 					"$gte": start,
@@ -1323,8 +1319,8 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
-				start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-				end := time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location())
+				start := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
+				end := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location()))
 
 				ors = append(ors, bson.M{
 					"$lte": start,
