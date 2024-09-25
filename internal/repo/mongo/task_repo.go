@@ -1230,6 +1230,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
+				// switch to local time
+				t = t.Local()
+
 				ors = append(ors, bson.M{
 					"$gte": t,
 				})
@@ -1240,6 +1243,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					slog.Error("invalid time value", "value", v)
 					continue
 				}
+
+				// switch to local time
+				t = t.Local()
 
 				ors = append(ors, bson.M{
 					"$lte": t,
@@ -1267,6 +1273,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
+				// switch to local time
+				t = t.Local()
+
 				ors = append(ors, bson.M{
 					"$lte": t,
 				})
@@ -1277,6 +1286,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					slog.Error("invalid time value", "value", v)
 					continue
 				}
+
+				// switch to local time
+				t = t.Local()
 
 				ors = append(ors, bson.M{
 					"$gte": t,
@@ -1304,6 +1316,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					continue
 				}
 
+				// switch to local time
+				t = t.Local()
+
 				start := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
 				end := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location()))
 
@@ -1318,6 +1333,9 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 					slog.Error("invalid time value", "value", v)
 					continue
 				}
+
+				// switch to local time
+				t = t.Local()
 
 				start := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
 				end := primitive.NewDateTimeFromTime(time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, -1, t.Location()))

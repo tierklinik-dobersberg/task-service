@@ -193,7 +193,7 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 				}
 			}
 
-			list[idx] = t.Format(time.RFC3339)
+			list[idx] = t.Local().Format(time.RFC3339)
 		}
 
 		return nil
