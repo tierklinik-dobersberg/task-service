@@ -1173,7 +1173,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 
 	resultIn := map[string]bson.A{}
 	resultNotIn := map[string]bson.A{}
-	resultOrs := bson.D{}
+	resultOrs := bson.A{}
 
 	add := func(n string, q taskql.Query) {
 		for _, v := range q.NotIn {
