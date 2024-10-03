@@ -30,9 +30,6 @@ import (
 //go:embed mails
 var mails embed.FS
 
-//go:embed node_modules
-var nodeModules embed.FS
-
 type resolver map[string]int
 
 func (r resolver) IsAllowed(importer string, owners []string) bool {
