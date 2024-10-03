@@ -172,7 +172,7 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 	}
 
 	// resolve datetime fields
-	resolveTimes := func(list []string) error {
+	resolveTimes := func(list []string, modifier string) error {
 		for idx, val := range list {
 			var t time.Time
 			var err error
@@ -180,7 +180,35 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 			if timeutil.IsDateSpecified(val) {
 				t, err = timeutil.ResolveTime(val, time.Now())
 			} else {
-				t, err = timeutil.ParseEnd(val)
+				now := time.Now()
+				year, month, day := now.Date()
+
+				fn := func(t time.Time) time.Time { return t }
+
+				switch modifier {
+				case "start":
+					fn = timeutil.StartOfDay
+
+				case "end":
+					fn = timeutil.EndOfDay
+				}
+
+				switch val {
+				case "yesterday":
+					t = fn(time.Date(year, month, day-1, 0, 0, 0, 0, time.Local))
+				case "today":
+					t = fn(now)
+				case "tomorrow":
+					t = fn(time.Date(year, month, day+1, 0, 0, 0, 0, time.Local))
+
+				default:
+					if modifier == "start" {
+						t, err = timeutil.ParseStart(val)
+					} else {
+						t, err = timeutil.ParseEnd(val)
+					}
+				}
+
 			}
 			if err != nil {
 				return err
@@ -194,24 +222,24 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 		return nil
 	}
 
-	if err := resolveTimes(copy[FieldDueAt].In); err != nil {
+	if err := resolveTimes(copy[FieldDueAt].In, "end"); err != nil {
 		return nil, fmt.Errorf("due_at: %w", err)
 	}
-	if err := resolveTimes(copy[FieldDueAt].NotIn); err != nil {
+	if err := resolveTimes(copy[FieldDueAt].NotIn, "end"); err != nil {
 		return nil, fmt.Errorf("-due_at: %w", err)
 	}
 
-	if err := resolveTimes(copy[FieldDueAfter].In); err != nil {
+	if err := resolveTimes(copy[FieldDueAfter].In, "end"); err != nil {
 		return nil, fmt.Errorf("due_after: %w", err)
 	}
-	if err := resolveTimes(copy[FieldDueAfter].NotIn); err != nil {
+	if err := resolveTimes(copy[FieldDueAfter].NotIn, "end"); err != nil {
 		return nil, fmt.Errorf("-due_after: %w", err)
 	}
 
-	if err := resolveTimes(copy[FieldDueBefore].In); err != nil {
+	if err := resolveTimes(copy[FieldDueBefore].In, "start"); err != nil {
 		return nil, fmt.Errorf("due_before: %w", err)
 	}
-	if err := resolveTimes(copy[FieldDueBefore].NotIn); err != nil {
+	if err := resolveTimes(copy[FieldDueBefore].NotIn, "start"); err != nil {
 		return nil, fmt.Errorf("-due_before: %w", err)
 	}
 
