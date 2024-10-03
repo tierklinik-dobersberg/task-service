@@ -402,6 +402,10 @@ func (svc *Service) ensureBoardOwner(ctx context.Context, boardID string) (*task
 		return nil, err
 	}
 
+	if remoteUser.ID == "service-account" {
+		return board, nil
+	}
+
 	if board.OwnerId != remoteUser.ID {
 		return board, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you are not allowed to perform this operation"))
 	}

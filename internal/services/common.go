@@ -65,6 +65,10 @@ func (svc *Common) IsAllowed(ctx context.Context, board *tasksv1.Board, op strin
 		return connect.NewError(connect.CodePermissionDenied, errors.New("authentication required"))
 	}
 
+	if remoteUser.ID == "service-account" {
+		return nil
+	}
+
 	// the board owner is always allowed
 	if board.OwnerId == remoteUser.ID {
 		return nil
