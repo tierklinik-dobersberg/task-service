@@ -17,6 +17,7 @@ import (
 	tasksv1 "github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/data"
+	"github.com/tierklinik-dobersberg/task-service/internal/timeutil"
 )
 
 type Query struct {
@@ -171,27 +172,18 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 	}
 
 	// resolve datetime fields
-	today := time.Now().Local()
 	resolveTimes := func(list []string) error {
 		for idx, val := range list {
 			var t time.Time
-			switch val {
-			case "yesterday":
-				t = time.Date(today.Year(), today.Month(), today.Day()-1, 0, 0, 0, 0, today.Location())
-			case "today":
-				t = today
-			case "tomorrow":
-				t = time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, today.Location())
+			var err error
 
-			default:
-				var err error
-				t, err = time.Parse(time.RFC3339, val)
-				if err != nil {
-					t, err = time.ParseInLocation(time.DateTime, val, time.Local)
-					if err != nil {
-						return fmt.Errorf("invalid time value %q: %w", val, err)
-					}
-				}
+			if timeutil.IsDateSpecified(val) {
+				t, err = timeutil.ResolveTime(val, time.Now())
+			} else {
+				t, err = timeutil.ParseEnd(val)
+			}
+			if err != nil {
+				return err
 			}
 
 			list[idx] = t.Local().Format(time.RFC3339)
