@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/bufbuild/connect-go v1.10.0
 	github.com/bufbuild/protovalidate-go v0.7.0
-	github.com/davecgh/go-spew v1.1.1
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/dop251/goja v0.0.0-20240919115326-6c7d1df7ff05
 	github.com/dop251/goja_nodejs v0.0.0-20240728170619-29b559befffc
 	github.com/elazarl/goproxy v0.0.0-20240909085733-6741dbfc16a1
@@ -14,7 +14,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.1
-	github.com/tierklinik-dobersberg/apis v0.10.0
+	github.com/tierklinik-dobersberg/apis v0.11.1-0.20241025123040-1127076fcd79
 	github.com/yuin/goldmark v1.7.4
 	go.mongodb.org/mongo-driver v1.17.0
 	google.golang.org/protobuf v1.34.2

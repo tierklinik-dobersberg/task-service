@@ -9,7 +9,6 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	"github.com/bufbuild/protovalidate-go"
-	"github.com/sirupsen/logrus"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/idm/v1/idmv1connect"
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
@@ -30,9 +29,9 @@ import (
 //go:embed mails
 var mails embed.FS
 
-type resolver map[string]int
+type permResolver map[string]int
 
-func (r resolver) IsAllowed(importer string, owners []string) bool {
+func (r permResolver) IsAllowed(importer string, owners []string) bool {
 	p := r[importer]
 
 	for _, o := range owners {
@@ -123,10 +122,12 @@ func main() {
 		backend, err = mongo.New(ctx, cfg.MongoDBURL, cfg.MongoDatabaseName)
 
 		if err != nil {
-			logrus.Fatalf("failed to create repository: %s", err)
+			slog.Error("failed to create repository", "error", err)
+			os.Exit(-1)
 		}
 	} else {
-		logrus.Fatal("missing MONGO_URL and MONGO_DATABASE")
+		slog.Error("missing MONGO_URL and MONGO_DATABASE")
+		os.Exit(-1)
 	}
 
 	repo := repo.New(backend)
@@ -135,6 +136,7 @@ func main() {
 	if cfg.IdmURL != "" {
 		resolver = permission.NewResolver(http.DefaultClient, cfg.IdmURL)
 	}
+
 	common := &services.Common{
 		Resolver: resolver,
 		Config:   *cfg,
@@ -143,7 +145,8 @@ func main() {
 
 	boardService, err := boards.New(ctx, repo, common)
 	if err != nil {
-		logrus.Fatalf("failed to create board service: %s", err)
+		slog.Error("failed to create board service", "error", err)
+		os.Exit(-1)
 	}
 
 	// create a new BoardService and add it to the mux.
@@ -152,7 +155,8 @@ func main() {
 
 	taskService, err := tasks.New(ctx, repo, common)
 	if err != nil {
-		logrus.Fatalf("failed to create task service: %s", err)
+		slog.Error("failed to create task service", "error", err)
+		os.Exit(-1)
 	}
 
 	path, handler = tasksv1connect.NewTaskServiceHandler(taskService, connect.WithInterceptors(interceptors...))
@@ -160,7 +164,7 @@ func main() {
 
 	loggingHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logrus.Infof("received request: %s %s %s%s", r.Proto, r.Method, r.Host, r.URL.String())
+			slog.Info("received requuest", "proto", r.Proto, "method", r.Method, "host", r.Host, "uri", r.URL.String())
 
 			next.ServeHTTP(w, r)
 		})
@@ -174,20 +178,32 @@ func main() {
 		})
 	}
 
+	/*
+		// Register services at the service catalog
+		catalog, err := consuldiscover.NewFromEnv()
+		if err != nil {
+			slog.Error("failed to setup service catalog client", "error", err)
+			os.Exit(-1)
+		}
+	*/
+
 	// Create the server
 	srv, err := server.CreateWithOptions(cfg.ListenAddress, wrapWithKey("public", loggingHandler(serveMux)), server.WithCORS(corsConfig))
 	if err != nil {
-		logrus.Fatalf("failed to setup server: %s", err)
+		slog.Error("failed to setup service", "error", err)
+		os.Exit(-1)
 	}
 
 	adminServer, err := server.CreateWithOptions(cfg.AdminListenAddress, wrapWithKey("admin", loggingHandler(serveMux)), server.WithCORS(corsConfig))
 	if err != nil {
-		logrus.Fatalf("failed to setup server: %s", err)
+		slog.Error("failed to setup server", "error", err)
+		os.Exit(-1)
 	}
 
-	logrus.Infof("HTTP/2 server (h2c) prepared successfully, startin to listen ...")
+	slog.Info("HTTP/2 server (h2c) prepared successfully, startin to listen ...")
 
 	if err := server.Serve(ctx, srv, adminServer); err != nil {
-		logrus.Fatalf("failed to serve: %s", err)
+		slog.Error("failed to serve", "error", err)
+		os.Exit(-1)
 	}
 }
