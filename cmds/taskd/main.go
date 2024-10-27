@@ -13,6 +13,8 @@ import (
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/cors"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery/consuldiscover"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
 	"github.com/tierklinik-dobersberg/apis/pkg/log"
 	"github.com/tierklinik-dobersberg/apis/pkg/server"
 	"github.com/tierklinik-dobersberg/apis/pkg/validator"
@@ -178,14 +180,20 @@ func main() {
 		})
 	}
 
-	/*
-		// Register services at the service catalog
-		catalog, err := consuldiscover.NewFromEnv()
-		if err != nil {
-			slog.Error("failed to setup service catalog client", "error", err)
-			os.Exit(-1)
-		}
-	*/
+	// Register services at the service catalog
+	catalog, err := consuldiscover.NewFromEnv()
+	if err != nil {
+		slog.Error("failed to setup service catalog client", "error", err)
+		os.Exit(-1)
+	}
+
+	if err := wellknown.BoardService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
+		slog.Error("failed to register board service at service catalog", "error", err)
+	}
+
+	if err := wellknown.TaskService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
+		slog.Error("failed to register board service at service catalog", "error", err)
+	}
 
 	// Create the server
 	srv, err := server.CreateWithOptions(cfg.ListenAddress, wrapWithKey("public", loggingHandler(serveMux)), server.WithCORS(corsConfig))
