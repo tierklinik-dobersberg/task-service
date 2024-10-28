@@ -13,6 +13,7 @@ import (
 	"github.com/tierklinik-dobersberg/apis/gen/go/tkd/tasks/v1/tasksv1connect"
 	"github.com/tierklinik-dobersberg/apis/pkg/auth"
 	"github.com/tierklinik-dobersberg/apis/pkg/cors"
+	"github.com/tierklinik-dobersberg/apis/pkg/discovery"
 	"github.com/tierklinik-dobersberg/apis/pkg/discovery/consuldiscover"
 	"github.com/tierklinik-dobersberg/apis/pkg/discovery/wellknown"
 	"github.com/tierklinik-dobersberg/apis/pkg/log"
@@ -187,11 +188,10 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := wellknown.BoardService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
-		slog.Error("failed to register board service at service catalog", "error", err)
-	}
-
-	if err := wellknown.TaskService.Register(ctx, catalog, cfg.AdminListenAddress); err != nil {
+	if err := discovery.Register(ctx, catalog, discovery.ServiceInstance{
+		Name:    wellknown.TaskV1ServiceScope,
+		Address: cfg.AdminListenAddress,
+	}); err != nil {
 		slog.Error("failed to register board service at service catalog", "error", err)
 	}
 
