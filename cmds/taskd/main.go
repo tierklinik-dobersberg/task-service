@@ -188,7 +188,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	if err := discovery.Register(ctx, catalog, discovery.ServiceInstance{
+	if err := discovery.Register(ctx, catalog, &discovery.ServiceInstance{
 		Name:    wellknown.TaskV1ServiceScope,
 		Address: cfg.AdminListenAddress,
 	}); err != nil {
