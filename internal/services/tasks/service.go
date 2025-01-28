@@ -160,7 +160,7 @@ func (svc *Service) DeleteTask(ctx context.Context, req *connect.Request[tasksv1
 
 	svc.PublishEvent(&tasksv1.TaskEvent{
 		Task:      task,
-		EventType: tasksv1.EventType_EVENT_TYPE_UPDATED,
+		EventType: tasksv1.EventType_EVENT_TYPE_DELETED,
 	})
 
 	return connect.NewResponse(new(emptypb.Empty)), nil
