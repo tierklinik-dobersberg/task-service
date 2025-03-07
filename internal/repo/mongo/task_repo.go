@@ -376,6 +376,23 @@ func (db *Repository) UpdateTask(ctx context.Context, authenticatedUserId string
 					OldValue:  old,
 				})
 
+			case "not_before":
+				if update.NotBefore.IsValid() {
+					setModel["notBefore"] = update.NotBefore.AsTime()
+				} else {
+					unsetModel["notBefore"] = ""
+				}
+
+				var old any
+				if task.NotBefore != nil && task.NotBefore.IsValid() {
+					old = task.NotBefore.AsTime().Format(time.RFC3339)
+				}
+
+				changes = append(changes, &ValueChange{
+					FieldName: "not_before",
+					OldValue:  old,
+				})
+
 			case "properties":
 				switch v := update.Properties.(type) {
 				case *tasksv1.UpdateTaskRequest_AddProperties:
@@ -1347,6 +1364,49 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 				ors = append(ors, bson.M{
 					"$lte": start,
 					"$gte": end,
+				})
+			}
+
+			if len(ors) == 1 {
+				result["dueTime"] = ors[0]
+			} else {
+				for _, o := range ors {
+					resultOrs = append(resultOrs, bson.E{
+						Key:   "dueTime",
+						Value: o,
+					})
+				}
+			}
+
+		case taskql.FieldNotBefore:
+			ors := bson.A{}
+
+			for _, v := range query.In {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				// switch to local time
+				t = t.Local()
+
+				ors = append(ors, bson.M{
+					"$lte": t,
+				})
+			}
+			for _, v := range query.NotIn {
+				t, err := time.Parse(time.RFC3339, v)
+				if err != nil {
+					slog.Error("invalid time value", "value", v)
+					continue
+				}
+
+				// switch to local time
+				t = t.Local()
+
+				ors = append(ors, bson.M{
+					"$gte": t,
 				})
 			}
 

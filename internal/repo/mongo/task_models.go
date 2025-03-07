@@ -54,26 +54,28 @@ type (
 		Subscriptions map[string]Subscription `bson:"subscriptions"`
 		Priority      *int32                  `bson:"priority"`
 		Attachments   []Attachment            `bson:"attachments"`
+		NotBefore     time.Time               `bson:"notBefore"`
 	}
 )
 
 func taskTagFromFieldName(fn string) string {
 	f, ok := map[string]string{
-		"board_id": "boardID",
-		"title": "title",
-		"description": "description",
-		"creator_id": "creator",
-		"assignee_id": "assignee",
-		"tags": "tags",
-		"status": "status",
-		"assigned_by": "assignedBy",
-		"due_time": "dueTime",
-		"create_time": "createTime",
-		"update_time": "updateTime",
-		"assign_time": "assignTime",
+		"board_id":      "boardID",
+		"title":         "title",
+		"description":   "description",
+		"creator_id":    "creator",
+		"assignee_id":   "assignee",
+		"tags":          "tags",
+		"status":        "status",
+		"assigned_by":   "assignedBy",
+		"due_time":      "dueTime",
+		"create_time":   "createTime",
+		"update_time":   "updateTime",
+		"assign_time":   "assignTime",
 		"complete_time": "completeTime",
-		"priority": "priority",
-	}[fn];
+		"priority":      "priority",
+		"not_before":    "notBefore",
+	}[fn]
 
 	if ok {
 		return f
@@ -181,6 +183,10 @@ func (task *Task) ToProto() *tasksv1.Task {
 		}
 	}
 
+	if !task.NotBefore.IsZero() {
+		pb.NotBefore = timestamppb.New(task.NotBefore)
+	}
+
 	if !task.AssignTime.IsZero() {
 		pb.AssignTime = timestamppb.New(task.AssignTime)
 	}
@@ -250,6 +256,10 @@ func taskFromProto(pb *tasksv1.Task) (*Task, error) {
 
 	if t.Tags == nil {
 		t.Tags = make([]string, 0)
+	}
+
+	if pb.NotBefore.IsValid() {
+		t.NotBefore = pb.NotBefore.AsTime()
 	}
 
 	if pb.CompleteTime.IsValid() {

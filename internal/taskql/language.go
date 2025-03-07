@@ -243,6 +243,13 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 		return nil, fmt.Errorf("-due_before: %w", err)
 	}
 
+	if err := resolveTimes(copy[FieldNotBefore].In, "end"); err != nil {
+		return nil, fmt.Errorf("not_before: %w", err)
+	}
+	if err := resolveTimes(copy[FieldNotBefore].NotIn, "end"); err != nil {
+		return nil, fmt.Errorf("-not_before: %w", err)
+	}
+
 	return copy, nil
 }
 
@@ -375,7 +382,7 @@ func (l *Language) getFieldValues(ctx context.Context, fieldName Field) ([]strin
 			return e.Tag
 		}), nil
 
-	case FieldDueAfter, FieldDueAt, FieldDueBefore:
+	case FieldDueAfter, FieldDueAt, FieldDueBefore, FieldNotBefore:
 		return []string{"today", "tomorrow", "yesterday"}, nil
 	}
 

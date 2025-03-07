@@ -15,7 +15,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.1.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
-	github.com/tierklinik-dobersberg/apis v0.39.2
+	github.com/tierklinik-dobersberg/apis v0.40.0
 	github.com/yuin/goldmark v1.7.8
 	go.mongodb.org/mongo-driver v1.17.3
 	google.golang.org/protobuf v1.36.5

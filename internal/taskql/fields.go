@@ -12,6 +12,7 @@ const (
 	FieldDueBefore = Field("due_before")
 	FieldDueAfter  = Field("due_after")
 	FieldDueAt     = Field("due_at")
+	FieldNotBefore = Field("not_before")
 )
 
 var allFields = []Field{
@@ -24,6 +25,7 @@ var allFields = []Field{
 	FieldDueBefore,
 	FieldDueAfter,
 	FieldDueAt,
+	FieldNotBefore,
 }
 
 func (f Field) IsValid() bool {
