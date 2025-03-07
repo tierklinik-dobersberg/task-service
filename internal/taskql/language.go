@@ -243,10 +243,10 @@ func (l *Language) Query(ctx context.Context) (map[Field]Query, error) {
 		return nil, fmt.Errorf("-due_before: %w", err)
 	}
 
-	if err := resolveTimes(copy[FieldNotBefore].In, "end"); err != nil {
+	if err := resolveTimes(copy[FieldNotBefore].In, "start"); err != nil {
 		return nil, fmt.Errorf("not_before: %w", err)
 	}
-	if err := resolveTimes(copy[FieldNotBefore].NotIn, "end"); err != nil {
+	if err := resolveTimes(copy[FieldNotBefore].NotIn, "start"); err != nil {
 		return nil, fmt.Errorf("-not_before: %w", err)
 	}
 
