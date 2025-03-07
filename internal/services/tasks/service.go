@@ -66,6 +66,7 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		Attachments:   r.Attachments,
 		Priority:      r.Priority,
 		Subscriptions: map[string]*tasksv1.Subscription{},
+		Properties:    req.Msg.Properties,
 	}
 
 	// Automatically subscribe the creator to task updates
