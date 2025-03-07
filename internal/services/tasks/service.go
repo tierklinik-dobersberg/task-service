@@ -63,6 +63,7 @@ func (svc *Service) CreateTask(ctx context.Context, req *connect.Request[tasksv1
 		CreateTime:    timestamppb.Now(),
 		UpdateTime:    timestamppb.Now(),
 		Status:        r.Status,
+		NotBefore:     r.NotBefore,
 		Attachments:   r.Attachments,
 		Priority:      r.Priority,
 		Subscriptions: map[string]*tasksv1.Subscription{},
