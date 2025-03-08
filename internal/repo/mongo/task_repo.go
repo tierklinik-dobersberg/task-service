@@ -1392,7 +1392,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 				t = t.Local()
 
 				ors = append(ors, bson.M{
-					"$lte": t,
+					"$gte": t,
 				})
 			}
 			for _, v := range query.NotIn {
@@ -1406,7 +1406,7 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 				t = t.Local()
 
 				ors = append(ors, bson.M{
-					"$gte": t,
+					"$lte": t,
 				})
 			}
 
