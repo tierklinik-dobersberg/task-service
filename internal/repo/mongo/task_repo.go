@@ -1411,11 +1411,11 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 			}
 
 			if len(ors) == 1 {
-				result["dueTime"] = ors[0]
+				result["notBefore"] = ors[0]
 			} else {
 				for _, o := range ors {
 					resultOrs = append(resultOrs, bson.E{
-						Key:   "dueTime",
+						Key:   "notBefore",
 						Value: o,
 					})
 				}
