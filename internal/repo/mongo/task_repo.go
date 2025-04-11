@@ -1371,9 +1371,10 @@ func filterFromTaskQlQuery(q map[taskql.Field]taskql.Query) bson.M {
 				result["dueTime"] = ors[0]
 			} else {
 				for _, o := range ors {
-					resultOrs = append(resultOrs, bson.E{
-						Key:   "dueTime",
-						Value: o,
+					resultOrs = append(resultOrs, bson.M{
+						// Key:   "dueTime",
+						// Value: o,
+						"dueTime": o,
 					})
 				}
 			}
